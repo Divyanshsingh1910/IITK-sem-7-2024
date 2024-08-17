@@ -1,1 +1,6 @@
 IITK Sem-7 2024
+- Courses
+	1. CS610
+	2. CS315
+	3. CS0202
+	4. ART402
