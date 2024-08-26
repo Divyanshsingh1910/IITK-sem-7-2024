@@ -9,11 +9,15 @@ using HR = high_resolution_clock;
 using HRTimer = HR::time_point;
 
 #define N (2048)
+// #define BLOCK (16)
+#define BLOCKi (4)
+#define BLOCKj (4)
+#define BLOCKk (4)
 
 void matmul_ijk(const uint32_t *A, const uint32_t *B, uint32_t *C, const int SIZE) {
   for (int i = 0; i < SIZE; i++) {
     for (int j = 0; j < SIZE; j++) {
-      uint32_t sum = 0.0;
+    uint32_t sum = 0.0;
       for (int k = 0; k < SIZE; k++) {
         sum += A[i * SIZE + k] * B[k * SIZE + j];
       }
@@ -23,15 +27,27 @@ void matmul_ijk(const uint32_t *A, const uint32_t *B, uint32_t *C, const int SIZ
 }
 
 void matmul_ijk_blocking(const uint32_t *A, const uint32_t *B, uint32_t *C, const int SIZE) {
-  for (int i = 0; i < SIZE; i++) {
-    for (int j = 0; j < SIZE; j++) {
-      uint32_t sum = 0.0;
-      for (int k = 0; k < SIZE; k++) {
-        sum += A[i * SIZE + k] * B[k * SIZE + j];
-      }
-      C[i * SIZE + j] += sum;
+
+    for(int ii = 0; ii<SIZE; ii += BLOCKi){
+
+        for(int jj = 0; jj < SIZE; jj += BLOCKj){
+
+            for(int kk=0; kk < SIZE; kk += BLOCKk){
+                for (int i = ii; i < min(SIZE, ii+BLOCKi); i++) {
+                    for (int j = jj; j < min(SIZE, jj + BLOCKj); j++) {
+                        
+                        uint32_t sum = 0.0;
+                        for (int k = kk; k < min(SIZE, kk + BLOCKk); k++) {
+
+                            sum += A[i * SIZE + k] * B[k * SIZE + j];
+
+                        }
+                        C[i * SIZE + j] += sum;
+                    }
+                }
+            }
+        }
     }
-  }
 }
 
 void init(uint32_t *mat, const int SIZE) {
