@@ -6,10 +6,10 @@ CPPFLAGS=
 LIBS=-pthread
 
 # First target is the default target
-all: assign1
+all: problem1
 
 # $@ is a variable that contains the target name.
-assign1: assign1.cpp
+problem1: problem1.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -o $(patsubst %.cpp,%.out,$<) $(LIBS)
 
 # The target is not a filename
