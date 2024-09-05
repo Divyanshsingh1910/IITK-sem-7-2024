@@ -1,5 +1,5 @@
 CXX=g++
-CXXFLAGS=-O3 -std=c++17 -mavx -mavx2
+CXXFLAGS=-O3 -g -std=c++17 -mavx -mavx2
 LIBS=-pthread
 
 # First target is the default target
