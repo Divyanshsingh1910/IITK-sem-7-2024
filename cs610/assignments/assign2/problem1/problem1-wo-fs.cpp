@@ -34,19 +34,19 @@ struct word_tracker {
             For each thread the word_count[i] has a 8 bytes integer. Now
             as there are 64 bytes in a cache line - most likely all
             the word_count variables fall in the same cache line resulting
-            in false sharing of that cache line across threads 
-        
+            in false sharing of that cache line across threads
+
         Fix1:
             Consider we have N threads, I will have a 8*N size word_count
-            array and for each thread, I will store the count at 
+            array and for each thread, I will store the count at
             word_count + 8*i ... + 8 bytes
             So that all of them lie in separate cache line.
 
             [[ Issue is -- this is memory iefficient --> 8 x #threads mem usage ]]
-        
+
      */
 
-    uint64_t word_count[40]; // 8 * MAX_THREADS 
+    uint64_t word_count[40]; // 8 * MAX_THREADS
     uint64_t total_lines_processed;
     uint64_t total_words_processed;
     pthread_mutex_t word_count_mutex;
@@ -101,9 +101,9 @@ int main(int argc, char *argv[]) {
     thread_count = strtol(argv[1], NULL, 10);
     MAX_THREADS = thread_count;
     std::string input = argv[2];
-    
+
     // This basically stores all the file-names in a queue
-    fill_producer_buffer(input); 
+    fill_producer_buffer(input);
 
     pthread_t threads_worker[thread_count];
 
@@ -152,10 +152,10 @@ void *thread_runner(void *th_args) {
         cerr << "Error opening input file from a thread!" << endl;
         exit(EXIT_FAILURE);
     }
-    
+
     /*
         Bug:
-            All the threads are fighting for the lock - leading the 
+            All the threads are fighting for the lock - leading the
             true-sharing problem
 
         Fix:

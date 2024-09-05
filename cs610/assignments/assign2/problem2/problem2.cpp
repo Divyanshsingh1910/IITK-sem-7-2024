@@ -46,7 +46,7 @@ std::fstream output_file;
 pthread_mutex_t input_file_lock     = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t mem_buffer_lock     = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t thread_wise_lock    = PTHREAD_MUTEX_INITIALIZER;
-                                                                                                                                                           1,1           Top
+
 
 /*  cond-vars   */
 pthread_cond_t cond         = PTHREAD_COND_INITIALIZER;
@@ -65,47 +65,53 @@ void print_usage(char *prog_name) {
 void *thread_runner(void *);
 void *write_to_file(void *);
 
-bool debug = true;
+bool debug = false;
 
 /*  memory buffer management    */
 void write_to_buffer(std::queue<std::string>& thread_buff, uint32_t thread_id){
-        bool not_done = true;
+    bool not_done = true;
 
-        while(not_done){
-                pthread_mutex_lock(&mem_buffer_lock);
-                if(debug) 
-                    cout << "thread #" + std::to_string(thread_id) + " took buffer_lock to read" << endl;
-                
-                if(buffer.size() == MAX_BUFFER_SIZE){
-                        cout << "buffer-full so releasing buffer lock" << endl;
-                        //signal consumer
-                        run_consumer = true;
-                        if( pthread_cond_signal(&cond) != 0){
-                                cerr << "pthread_cond_signal() error" << endl;
-                                exit(4);
-                        }
+    while(not_done){
+        pthread_mutex_lock(&mem_buffer_lock);
+        if(debug)
+                cout <<"thread #" + std::to_string(thread_id)
+                + " took buffer_lock to read" << endl;
 
-                        while(run_consumer)
-                            pthread_cond_wait(&ack_cond, &mem_buffer_lock);
+        if(buffer.size() == MAX_BUFFER_SIZE){
+            if(debug)
+                cout <<  "buffer-full so releasing buffer lock" << endl;
+            //signal consumer
+            run_consumer = true;
+            if( pthread_cond_signal(&cond) != 0){
+                cerr << "pthread_cond_signal() error" << endl;
+                exit(4);
+            }
 
-                       // pthread_mutex_unlock(&mem_buffer_lock);
-                        //continue;
-                }
-                else{
-                        while(buffer.size() < MAX_BUFFER_SIZE
-                                && !thread_buff.empty()){
+            if(debug)
+                cout <<  "Signal sent to consumer" <<
+                " + waiting for consumer to clean" << endl;
+            while(run_consumer)
+                pthread_cond_wait(&ack_cond, &mem_buffer_lock);
 
-                                buffer.push(thread_buff.front());
-                                thread_buff.pop();
-                        }
-
-                        if(thread_buff.empty())
-                                not_done = false;
-                }
-
-                if(debug) cout << "thread going to release buffer lock" << endl;
-                pthread_mutex_unlock(&mem_buffer_lock);
+           // pthread_mutex_unlock(&mem_buffer_lock);
+            //continue;
         }
+        else{
+            while(buffer.size() < MAX_BUFFER_SIZE
+                && !thread_buff.empty()){
+
+                buffer.push(thread_buff.front());
+                thread_buff.pop();
+            }
+
+            if(thread_buff.empty())
+                not_done = false;
+        }
+
+        if(debug) cout << "thread going to release buffer lock" << endl;
+        pthread_mutex_unlock(&mem_buffer_lock);
+    }
+
 
 }
 
@@ -133,15 +139,15 @@ int main(int argc, char* argv[])
 
     //opening files
     input_file.open(in_file_path.c_str(), ios::in);
-    output_file.open(out_file_path.c_str(), ios::out | ios::app);
+    output_file.open(out_file_path.c_str(), ios::out );
 
     if(!input_file.is_open()){
-            cerr << "Can't open the input file" << endl;
-            return 1;
+        cerr << "Can't open the input file" << endl;
+        return 1;
     }
     if(!output_file.is_open()){
-            cerr << "Can't open the output file" << endl;
-            return 1;
+        cerr << "Can't open the output file" << endl;
+        return 1;
     }
 
 
@@ -153,16 +159,28 @@ int main(int argc, char* argv[])
 
     //reader thread spawning
     for(int i = 0; i < THREAD_COUNT; i++){
-            thread_args[i].tid = i;
-            pthread_create(&threads_worker[i], nullptr,
-                    thread_runner, (void*)&thread_args[i]);
+        thread_args[i].tid = i;
+        pthread_create(&threads_worker[i], nullptr,
+                thread_runner, (void*)&thread_args[i]);
     }
 
 
 
-    //barrier-sync
+    //barrier for producer threads
     for(int i=0; i < THREAD_COUNT; i++)
-            pthread_join(threads_worker[i], NULL);
+        pthread_join(threads_worker[i], NULL);
+
+    READING = false;    //atomic
+    if(debug)
+        cout <<  "Producer threads are done with their work" << endl;
+
+    /*  It might be possible that consumer is still
+        waiting for cond_var
+    */
+    run_consumer = true;
+    pthread_cond_signal(&cond);
+    //wait for consumer thread to finish
+    pthread_join(threads_worker[THREAD_COUNT], NULL);
 
 
     //closing I/O
@@ -175,96 +193,107 @@ int main(int argc, char* argv[])
 
 //Reader threads
 void *thread_runner( void* th_args){
-        struct t_data *args = (struct t_data *)th_args;
-        uint32_t thread_id = args->tid;
-        std::string line;
-        std::queue<std::string> thread_buff;
+    struct t_data *args = (struct t_data *)th_args;
+    uint32_t thread_id = args->tid;
+    std::string line;
+    std::queue<std::string> thread_buff;
 
-        //take to lock to read from file
-        pthread_mutex_lock(&input_file_lock);
+    //take to lock to read from file
+    pthread_mutex_lock(&input_file_lock);
 
-        //sanity check
-        line = "THEAD #" + std::to_string(thread_id) + " is writing:\n";
-        thread_buff.push(line);
+    //sanity check
+    line = "THEAD #" + std::to_string(thread_id) + " is writing:\n";
+    thread_buff.push(line);
 
-        if(TOT_LINES_READ < LINES_PER_THREAD * (THREAD_COUNT - 1)) //atomic
-            //read only L lines
-        {
-                uint64_t line_count = 0;
+    if(TOT_LINES_READ < LINES_PER_THREAD * (THREAD_COUNT - 1)) //atomic
+        //read only L lines
+    {
+        uint64_t line_count = 0;
 
-                while (std::getline( input_file, line)){
-                        //buffer.push(line);
-                        thread_buff.push(line);
+        while (std::getline( input_file, line)){
+            //buffer.push(line);
+            thread_buff.push(line);
 
-                        line_count++; //read lines
+            line_count++; //read lines
 
-                        if(line_count == LINES_PER_THREAD) break;
-                }
-
-                TOT_LINES_READ += LINES_PER_THREAD;     //atomic
-
-        }
-        else{
-                while(!input_file.eof() && std::getline(input_file, line)){
-                        //buffer.push(line);
-                        thread_buff.push(line);
-                }
-
-                READING = false;    //atomic
+            if(line_count == LINES_PER_THREAD) break;
         }
 
-        pthread_mutex_unlock(&input_file_lock);
+        TOT_LINES_READ += LINES_PER_THREAD;     //atomic
 
-        //write thread's content into the buffer
-        //other thread can't write in between
-        pthread_mutex_lock(&thread_wise_lock);
-        if(debug) cout << "Thread #" + std::to_string(thread_id) + "took thread_wise_lock" << endl;
-        write_to_buffer(thread_buff, thread_id);
-        if(debug) cout << "Thread #" + std::to_string(thread_id) + "going to release thread_wise_lock" << endl;
-        pthread_mutex_unlock(&thread_wise_lock);
+    }
+    else{
+        while(!input_file.eof() && std::getline(input_file, line)){
+            //buffer.push(line);
+            thread_buff.push(line);
+        }
 
-        pthread_exit(nullptr);
+    }
+
+    pthread_mutex_unlock(&input_file_lock);
+
+    //write thread's content into the buffer
+    //other thread can't write in between
+    pthread_mutex_lock(&thread_wise_lock);
+    if(debug)
+        cout << "Thread #" + std::to_string(thread_id) +
+            "took thread_wise_lock" << endl;
+    write_to_buffer(thread_buff, thread_id);
+    if(debug)
+        cout << "Thread #" + std::to_string(thread_id) +
+            "going to release thread_wise_lock" << endl;
+    pthread_mutex_unlock(&thread_wise_lock);
+
+    pthread_exit(nullptr);
 }
 
 
 
 //Writer threads
 void *write_to_file( void* th_args ){
-        
 
-        while(READING)
-        {
-                cout << "Write to file spawned:" << endl;
-                pthread_mutex_lock(&mem_buffer_lock);
-                
-                if(debug) cout << "consumer took buffer_lock to waite & clean" << endl;
-                while(!run_consumer){
-                        pthread_cond_wait(&cond, &mem_buffer_lock);
-                }
-                
-                cout << "Consumer signalled to clean buffer" << endl;
-                
-                while(!buffer.empty()){                    
-                    output_file << buffer.front() << endl;
-                    buffer.pop();
-                }
 
-                run_consumer = false;
+    while(READING)
+    {
+        if(debug)
+ cout <<  "Write to file spawned:" << endl;
+        pthread_mutex_lock(&mem_buffer_lock);
 
-                pthread_cond_signal(&ack_cond);
-                
-                cout << "consumer going to release the buffer lock" << endl;
-                pthread_mutex_unlock(&mem_buffer_lock);
+        if(debug)
+            cout << "consumer took buffer_lock to waite & clean" << endl;
+
+        run_consumer = false;
+        pthread_cond_signal(&ack_cond);
+
+        while(!run_consumer){
+            pthread_cond_wait(&cond, &mem_buffer_lock);
         }
+
+        if(debug)
+ cout <<  "consumer signalled to clean buffer" << endl;
 
         while(!buffer.empty()){
-                output_file << buffer.front() << endl;
-                buffer.pop();
+            output_file << buffer.front() << endl;
+            buffer.pop();
         }
 
+       // run_consumer = false;
 
-        pthread_exit(nullptr);
+        //pthread_cond_signal(&ack_cond);
+
+        if(debug)
+            cout <<  "consumer going to release the buffer lock" << endl;
+        pthread_mutex_unlock(&mem_buffer_lock);
+    }
+
+    if(debug)
+ cout <<  "Just reading the last of lines " << endl;
+    while(!buffer.empty()){
+        output_file << buffer.front() << endl;
+        buffer.pop();
+    }
+
+
+    pthread_exit(nullptr);
 }
-
-
 

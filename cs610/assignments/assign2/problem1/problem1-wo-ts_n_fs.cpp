@@ -28,7 +28,26 @@ struct t_data {
 
 // struct to keep track of the number of occurrences of a word
 struct word_tracker {
-    uint64_t word_count[5];
+    //uint64_t word_count[5];
+    /*                     FALSE SHARING
+
+        Bug:
+            For each thread the word_count[i] has a 8 bytes integer. Now
+            as there are 64 bytes in a cache line - most likely all
+            the word_count variables fall in the same cache line resulting
+            in false sharing of that cache line across threads
+
+        Fix1:
+            Consider we have N threads, I will have a 8*N size word_count
+            array and for each thread, I will store the count at
+            word_count + 8*i ... + 8 bytes
+            So that all of them lie in separate cache line.
+
+            [[ Issue is -- this is memory iefficient --> 8 x #threads mem usage ]]
+
+     */
+
+    uint64_t word_count[40]; // 8 * MAX_THREADS
     uint64_t total_lines_processed;
     uint64_t total_words_processed;
     pthread_mutex_t word_count_mutex;
@@ -52,7 +71,7 @@ void print_usage(char *prog_name) {
 
 void print_counters() {
     for (int id = 0; id < MAX_THREADS; ++id) {
-        std::cout << "Thread " << id << " counter: " << tracker.word_count[id]
+        std::cout << "Thread " << id << " counter: " << tracker.word_count[8*id]
                             << '\n';
     }
 }
@@ -94,7 +113,7 @@ int main(int argc, char *argv[]) {
     struct t_data *args_array = (struct t_data *)malloc(sizeof(struct t_data) * thread_count);
 
     for (int i = 0; i < thread_count; i++)
-        tracker.word_count[i] = 0;
+        tracker.word_count[8*i] = 0;
     tracker.total_lines_processed = 0;
     tracker.word_count_mutex = PTHREAD_MUTEX_INITIALIZER;
 
@@ -135,12 +154,27 @@ void *thread_runner(void *th_args) {
         exit(EXIT_FAILURE);
     }
 
+    /*                  TRUE SHARING
+
+        Bug:
+            All the threads are fighting for the lock - leading the
+            true-sharing problem
+
+        Fix:
+            Rather than updating the count on each word/line read,
+            count it in a local variable and add in the end
+    */
+    uint64_t total_line_thread = 0;
+    uint64_t total_word_thread = 0;
     //iterated through the lines in the file
     while (getline(input_file, line)) {
 
+        total_line_thread += 1;
+        /*
         pthread_mutex_lock(&line_count_mutex);
         tracker.total_lines_processed++;
         pthread_mutex_unlock(&line_count_mutex);
+        */
 
         std::string delimiter = " ";
         size_t pos = 0;
@@ -149,16 +183,28 @@ void *thread_runner(void *th_args) {
             token = line.substr(0, pos);
 
             // false sharing: on word count
-            tracker.word_count[thread_id]++;
+            tracker.word_count[8 * thread_id]++;
 
             // true sharing: on lock and total word variable
+            total_word_thread += 1;
+            /*
             pthread_mutex_lock(&tracker.word_count_mutex);
             tracker.total_words_processed++;
             pthread_mutex_unlock(&tracker.word_count_mutex);
+            */
 
             line.erase(0, pos + delimiter.length());
         }
     }
+    //updating the line counter now
+    pthread_mutex_lock(&line_count_mutex);
+    tracker.total_lines_processed += total_line_thread;
+    pthread_mutex_unlock(&line_count_mutex);
+
+    //similarly the total_word_count
+    pthread_mutex_lock(&tracker.word_count_mutex);
+    tracker.total_words_processed += total_word_thread;
+    pthread_mutex_unlock(&tracker.word_count_mutex);
 
     input_file.close();
 
