@@ -153,26 +153,12 @@ void *thread_runner(void *th_args) {
         exit(EXIT_FAILURE);
     }
 
-    /*
-        Bug:
-            All the threads are fighting for the lock - leading the
-            true-sharing problem
-
-        Fix:
-            Rather than updating the count on each word/line read,
-            count it in a local variable and add in the end
-    */
-    uint64_t total_line_thread = 0;
-    uint64_t total_word_thread = 0;
     //iterated through the lines in the file
     while (getline(input_file, line)) {
 
-        total_line_thread += 1;
-        /*
         pthread_mutex_lock(&line_count_mutex);
         tracker.total_lines_processed++;
         pthread_mutex_unlock(&line_count_mutex);
-        */
 
         std::string delimiter = " ";
         size_t pos = 0;
@@ -184,25 +170,13 @@ void *thread_runner(void *th_args) {
             tracker.word_count[8 * thread_id]++;
 
             // true sharing: on lock and total word variable
-            total_word_thread += 1;
-            /*
             pthread_mutex_lock(&tracker.word_count_mutex);
             tracker.total_words_processed++;
             pthread_mutex_unlock(&tracker.word_count_mutex);
-            */
 
             line.erase(0, pos + delimiter.length());
         }
     }
-    //updating the line counter now
-    pthread_mutex_lock(&line_count_mutex);
-    tracker.total_lines_processed += total_line_thread;
-    pthread_mutex_unlock(&line_count_mutex);
-
-    //similarly the total_word_count
-    pthread_mutex_lock(&tracker.word_count_mutex);
-    tracker.total_words_processed += total_word_thread;
-    pthread_mutex_unlock(&tracker.word_count_mutex);
 
     input_file.close();
 

@@ -201,9 +201,11 @@ void *thread_runner( void* th_args){
     //take to lock to read from file
     pthread_mutex_lock(&input_file_lock);
 
-    //sanity check
-    line = "THEAD #" + std::to_string(thread_id) + " is writing:\n";
-    thread_buff.push(line);
+    if(debug){
+        //sanity check
+        line = "THEAD #" + std::to_string(thread_id) + " is writing:\n";
+        thread_buff.push(line);
+    }
 
     if(TOT_LINES_READ < LINES_PER_THREAD * (THREAD_COUNT - 1)) //atomic
         //read only L lines
@@ -262,6 +264,12 @@ void *write_to_file( void* th_args ){
         if(debug)
             cout << "consumer took buffer_lock to waite & clean" << endl;
 
+        /*
+            The reason behind putting the `ack_cond` variable above the
+            `cond` variable is because when the producer receives signal
+            to continue its execution I want the consumer thread to be in
+            the state of acquired `mem_buffer_lock`
+        */
         run_consumer = false;
         pthread_cond_signal(&ack_cond);
 
@@ -278,7 +286,6 @@ void *write_to_file( void* th_args ){
         }
 
        // run_consumer = false;
-
         //pthread_cond_signal(&ack_cond);
 
         if(debug)
