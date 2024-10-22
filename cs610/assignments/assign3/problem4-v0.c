@@ -4,7 +4,7 @@
 #include <string.h>
 #include <time.h>
 
-#define NSEC_SEC_MUL (1.0e9)
+#define NSEC_SEC_MUL (1.0e3)
 
 void gridloopsearch(
     double dd1, double dd2, double dd3, double dd4, double dd5, double dd6, double dd7, double dd8,
@@ -177,37 +177,138 @@ void gridloopsearch(
 
   // grid search starts
   for (int r1 = 0; r1 < s1; ++r1) {
+      printf("Outermost loop itr number: %d\n", r1);
     x1 = dd1 + r1 * dd3;
+      q1 += c11 * x1;
+      q2 += c21 * x1;
+      q3 += c31 * x1;
+      q4 += c41 * x1;
+      q5 += c51 * x1;
+      q6 += c61 * x1;
+      q7 += c71 * x1;
+      q8 += c81 * x1;
+      q9 += c91 * x1;
+      q10 += c101 * x1;
 
     for (int r2 = 0; r2 < s2; ++r2) {
       x2 = dd4 + r2 * dd6;
+         q1 += c12 * x2;
+         q2 += c22 * x2;
+         q3 += c32 * x2;
+         q4 += c42 * x2;
+         q5 += c52 * x2;
+         q6 += c62 * x2;
+         q7 += c72 * x2;
+         q8 += c82 * x2;
+         q9 += c92 * x2;
+         q10 += c102 * x2;
 
       for (int r3 = 0; r3 < s3; ++r3) {
         x3 = dd7 + r3 * dd9;
+          q1 += c13 * x3;
+          q2 += c23 * x3;
+          q3 += c33 * x3;
+          q4 += c43 * x3;
+          q5 += c53 * x3;
+          q6 += c63 * x3;
+          q7 += c73 * x3;
+          q8 += c83 * x3;
+          q9 += c93 * x3;
+          q10 += c103 * x3;
 
         for (int r4 = 0; r4 < s4; ++r4) {
           x4 = dd10 + r4 * dd12;
+            q1 += c14 * x4;
+            q2 += c24 * x4;
+            q3 += c34 * x4;
+            q4 += c44 * x4;
+            q5 += c54 * x4;
+            q6 += c64 * x4;
+            q7 += c74 * x4;
+            q8 += c84 * x4;
+            q9 += c94 * x4;
+            q10 += c104 * x4;
 
           for (int r5 = 0; r5 < s5; ++r5) {
             x5 = dd13 + r5 * dd15;
+              q1 += c15 * x5;
+              q2 += c25 * x5;
+              q3 += c35 * x5;
+              q4 += c45 * x5;
+              q5 += c55 * x5;
+              q6 += c65 * x5;
+              q7 += c75 * x5;
+              q8 += c85 * x5;
+              q9 += c95 * x5;
+              q10 += c105 * x5;
 
             for (int r6 = 0; r6 < s6; ++r6) {
               x6 = dd16 + r6 * dd18;
+                q1 += c16 * x6;
+                q2 += c26 * x6;
+                q3 += c36 * x6;
+                q4 += c46 * x6;
+                q5 += c56 * x6;
+                q6 += c66 * x6;
+                q7 += c76 * x6;
+                q8 += c86 * x6;
+                q9 += c96 * x6;
+                q10 += c106 * x6;
 
               for (int r7 = 0; r7 < s7; ++r7) {
                 x7 = dd19 + r7 * dd21;
+                  q1 += c17 * x7;
+                  q2 += c27 * x7;
+                  q3 += c37 * x7;
+                  q4 += c47 * x7;
+                  q5 += c57 * x7;
+                  q6 += c67 * x7;
+                  q7 += c77 * x7;
+                  q8 += c87 * x7;
+                  q9 += c97 * x7;
+                  q10 += c107 * x7;
 
                 for (int r8 = 0; r8 < s8; ++r8) {
                   x8 = dd22 + r8 * dd24;
+                    q1 += c18 * x8;
+                    q2 += c28 * x8;
+                    q3 += c38 * x8;
+                    q4 += c48 * x8;
+                    q5 += c58 * x8;
+                    q6 += c68 * x8;
+                    q7 += c78 * x8;
+                    q8 += c88 * x8;
+                    q9 += c98 * x8;
+                    q10 += c108 * x8;
 
                   for (int r9 = 0; r9 < s9; ++r9) {
                     x9 = dd25 + r9 * dd27;
+                      q1 += c19 * x9;
+                      q2 += c29 * x9;
+                      q3 += c39 * x9;
+                      q4 += c49 * x9;
+                      q5 += c59 * x9;
+                      q6 += c69 * x9;
+                      q7 += c79 * x9;
+                      q8 += c89 * x9;
+                      q9 += c99 * x9;
+                      q10 += c109 * x9;
 
                     for (int r10 = 0; r10 < s10; ++r10) {
                       x10 = dd28 + r10 * dd30;
+                         q1 = fabs(q1 + c110 * x10 - d1);
+                         q2 = fabs(q2 + c210 * x10 - d2);
+                         q3 = fabs(q3 + c310 * x10 - d3);
+                         q4 = fabs(q4 + c410 * x10 - d4);
+                         q5 = fabs(q5 + c510 * x10 - d5);
+                         q6 = fabs(q6 + c610 * x10 - d6);
+                         q7 = fabs(q7 + c710 * x10 - d7);
+                         q8 = fabs(q8 + c810 * x10 - d8);
+                         q9 = fabs(q9 + c910 * x10 - d9);
+                         q10 = fabs(q10 + c1010 * x10 - d10);
 
                       // constraints
-
+                     /*
                       q1 = fabs(c11 * x1 + c12 * x2 + c13 * x3 + c14 * x4 + c15 * x5 + c16 * x6 +
                                 c17 * x7 + c18 * x8 + c19 * x9 + c110 * x10 - d1);
 
@@ -236,7 +337,7 @@ void gridloopsearch(
 
                       q10 = fabs(c101 * x1 + c102 * x2 + c103 * x3 + c104 * x4 + c105 * x5 +
                                  c106 * x6 + c107 * x7 + c108 * x8 + c109 * x9 + c1010 * x10 - d10);
-
+                      */
                       if ((q1 <= e1) && (q2 <= e2) && (q3 <= e3) && (q4 <= e4) && (q5 <= e5) &&
                           (q6 <= e6) && (q7 <= e7) && (q8 <= e8) && (q9 <= e9) && (q10 <= e10)) {
                         pnts = pnts + 1;
