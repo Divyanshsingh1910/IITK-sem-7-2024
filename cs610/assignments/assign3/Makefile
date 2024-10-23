@@ -14,7 +14,7 @@ LIBS=-pthread
 
 .DEFAULT_TARGET: all
 # First target is the default target
-all: problem1 problem2 problem3 problem4-v0
+all: problem1 problem2 problem3 problem4-opt1 problem4-org problem4-opt2
 
 # $@ is a variable that contains the target name.
 problem1: problem1.cpp
@@ -26,9 +26,14 @@ problem2: problem2.cpp
 problem3: problem3.cpp
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -o $(patsubst %.cpp,%.out,$<) $(LIBS)
 
-problem4-v0: problem4-v0.c
+problem4-org: problem4-org.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $(patsubst %.c,%.out,$<)
 
+problem4-opt1: problem4-opt1.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< -o $(patsubst %.c,%.out,$<)
+
+problem4-opt2: problem4-opt2.cpp
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -o $(patsubst %.cpp,%.out,$<)
 # The target is not a filename, always run the rule even if there is a file
 # called "clean".
 .PHONY: clean

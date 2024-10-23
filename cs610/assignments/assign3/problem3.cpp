@@ -123,12 +123,12 @@ void do_task(){
 #pragma omp parallel num_threads(THREAD_COUNT+1) private(line, thread_buff)
 {
     int tid = omp_get_thread_num();
-   if(tid < THREAD_COUNT){ //Reader thread
-    /************************************************
-                PRODUCER THREAD START
-     ************************************************/
+    if(tid < THREAD_COUNT){ //Reader thread
+      /************************************************
+                  PRODUCER THREAD START
+      ************************************************/
 
-        /* read file one-by-one by making section critical */
+          /* read file one-by-one by making section critical */
 #pragma omp critical (read_from_file)
         {
 
