@@ -183,7 +183,7 @@ void gridloopsearch(
   s10 = floor((dd29 - dd28) / dd30);
 
   //to store the results 
-  int32_t NUM_THREADS = 13;
+  int32_t NUM_THREADS = s1;
   vector<vector<vector<double>>> results(NUM_THREADS);
 
   // grid search starts

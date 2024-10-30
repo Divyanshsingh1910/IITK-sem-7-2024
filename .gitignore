@@ -1,2 +1,8 @@
 *.ipynb_checkpoints*
 *.out
+*.mp4
+*.swp
+cs315/assignments/assign1/indexer/*
+*.csv
+*.db
+*.zip

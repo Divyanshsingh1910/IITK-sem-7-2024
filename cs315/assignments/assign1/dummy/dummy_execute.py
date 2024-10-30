@@ -1,4 +1,4 @@
-# You are allowed to import any modules whatsoever (not even numpy, sklearn etc)
+# You are not allowed to import any modules whatsoever (not even numpy, sklearn etc)
 # The use of file IO is forbidden. Your code should not read from or write onto files
 
 # SUBMIT YOUR CODE AS TWO PYTHON (.PY) FILES INSIDE A ZIP ARCHIVE

@@ -124,11 +124,11 @@ void do_task(){
 {
     int tid = omp_get_thread_num();
     if(tid < THREAD_COUNT){ //Reader thread
-      /************************************************
-                  PRODUCER THREAD START
-      ************************************************/
+        /************************************************
+                    PRODUCER THREAD START
+        ************************************************/
 
-          /* read file one-by-one by making section critical */
+        /* read file one-by-one by making section critical */
 #pragma omp critical (read_from_file)
         {
 
@@ -212,7 +212,7 @@ void do_task(){
     else{ //Write thread
     /************************************************
                 CONSUMER THREAD START
-     ************************************************/
+    ************************************************/
         while(READING)
         {
             pthread_mutex_lock(&buffer_lock);
@@ -251,6 +251,6 @@ void do_task(){
                 CONSUMER THREAD END
      ************************************************/
     }
-} //paralle-region ends here
+}   //paralle-region ends here
 
 }
