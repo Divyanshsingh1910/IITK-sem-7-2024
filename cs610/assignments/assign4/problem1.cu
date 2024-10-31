@@ -77,12 +77,11 @@ __global__ void kernel1( double* d_in, double* d_out) {
         + d_in[z*zWidth + y*ywidth + x-1]);
   }
 }
-
 // TODO: Edit the function definition as required
-__global__ void kernel2_new(double* d_in, double* d_out) {
+__global__ void kernel2(double* d_in, double* d_out) {
 
-  __shared__ double tile[(TILE_DIM+2)*(TILE_DIM+2)*(TILE_DIM+2)];
-  uint32_t PER_THREAD_CNT = TILE_DIM/BLOCK_JUMPS; // 32/4 = 8
+  __shared__ double tile[(TILE_DIMX+2)*(TILE_DIMY+2)*(TILE_DIMZ+2)];
+  uint32_t PER_THREAD_CNT = BLOCK_JUMPS; // 4 
 
   int x = blockIdx.x*blockDim.x + threadIdx.x;
   int y = blockIdx.y*blockDim.y + threadIdx.y;
@@ -101,23 +100,23 @@ __global__ void kernel2_new(double* d_in, double* d_out) {
       y = y_bar*(PER_THREAD_CNT) + j;
 
       if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
-         tile[(1+threadIdx.z*PER_THREAD_CNT-1)*(TILE_DIM+2)*(TILE_DIM+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT-1)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]   
               = d_in[(z-1)*zWidth + y*ywidth + x];
-         tile[(1+threadIdx.z*PER_THREAD_CNT+1)*(TILE_DIM+2)*(TILE_DIM+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT+1)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]   
             = d_in[(z+1)*zWidth + y*ywidth + x];
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT-1)*(TILE_DIM+2) + (1+threadIdx.x)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMY+2)*(TILE_DIMX+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT-1)*(TILE_DIMX+2) + (1+threadIdx.x)]   
             = d_in[z*zWidth + (y-1)*ywidth + x];
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT+1)*(TILE_DIM+2) + (1+threadIdx.x)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT+1)*(TILE_DIMX+2) + (1+threadIdx.x)]   
             = d_in[z*zWidth + (y+1)*ywidth + x];
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x+1)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x+1)]   
             = d_in[z*zWidth + y*ywidth + x+1]; 
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x-1)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x-1)]   
             = d_in[z*zWidth + y*ywidth + x-1];
       }
     }
@@ -127,31 +126,30 @@ __global__ void kernel2_new(double* d_in, double* d_out) {
   __syncthreads(); 
 
   //use shared memory now 
-  for(int i=0; i<TILE_DIM/BLOCK_JUMPS; i++){
-    for(int j=0; j<TILE_DIM/BLOCK_JUMPS; j++){
-      z = z_bar*(TILE_DIM/BLOCK_JUMPS) + i;
-      y = y_bar*(TILE_DIM/BLOCK_JUMPS) + j;
+  for(int i=0; i<PER_THREAD_CNT; i++){
+    for(int j=0; j<PER_THREAD_CNT; j++){
+      z = z_bar*(PER_THREAD_CNT) + i;
+      y = y_bar*(PER_THREAD_CNT) + j;
 
       if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
          d_out[z*zWidth + y*ywidth + x] = 0.8 * (
-           tile[(1+threadIdx.z*PER_THREAD_CNT-1)*(TILE_DIM+2)*(TILE_DIM+2) +  
-                (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x)]   
-             + 
-           tile[(1+threadIdx.z*PER_THREAD_CNT+1)*(TILE_DIM+2)*(TILE_DIM+2) +  
-                (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x)]   
-             + 
-           tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
-                (1+threadIdx.y*PER_THREAD_CNT-1)*(TILE_DIM+2) + (1+threadIdx.x)]   
-             + 
-           tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
-                (1+threadIdx.y*PER_THREAD_CNT+1)*(TILE_DIM+2) + (1+threadIdx.x)]   
-             + 
-           tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
-                (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x+1)]   
-             + 
-           tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
-                (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x-1)]   
-           );
+         tile[(1+threadIdx.z*PER_THREAD_CNT-1)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]   
+           + 
+         tile[(1+threadIdx.z*PER_THREAD_CNT+1)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]   
+           + 
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMY+2)*(TILE_DIMX+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT-1)*(TILE_DIMX+2) + (1+threadIdx.x)]   
+           + 
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT+1)*(TILE_DIMX+2) + (1+threadIdx.x)]   
+           + 
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x+1)]   
+           + 
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x-1)]);  
       }
     }
   }
@@ -159,21 +157,22 @@ __global__ void kernel2_new(double* d_in, double* d_out) {
 }
 
 // TODO: Edit the function definition as required
-__global__ void kernel2(double* d_in, double* d_out) {
+__global__ void kernel2_old(double* d_in, double* d_out) {
 
+  // thread coordinates 
   int x = blockIdx.x*blockDim.x + threadIdx.x;
   int y = blockIdx.y*blockDim.y + threadIdx.y;
   int z = blockIdx.z*blockDim.z + threadIdx.z;
 
-  uint32_t zWidth = (blockDim.x*gridDim.x)*(blockDim.y*gridDim.y*(TILE_DIM/BLOCK_JUMPS));
+  uint32_t zWidth = (blockDim.x*gridDim.x)*(blockDim.y*gridDim.y*BLOCK_JUMPS);
   uint32_t ywidth = blockDim.x*gridDim.x;
 
   uint32_t z_bar = z;
   uint32_t y_bar = y;
-  for(int i=0; i<TILE_DIM/BLOCK_JUMPS; i++){
-    for(int j=0; j<TILE_DIM/BLOCK_JUMPS; j++){
-      z = z_bar*(TILE_DIM/BLOCK_JUMPS) + i;
-      y = y_bar*(TILE_DIM/BLOCK_JUMPS) + j;
+  for(int i=0; i<BLOCK_JUMPS; i++){
+    for(int j=0; j<BLOCK_JUMPS; j++){
+      z = z_bar*(BLOCK_JUMPS) + i;
+      y = y_bar*(BLOCK_JUMPS) + j;
 
       if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
          d_out[z*zWidth + y*ywidth + x] = 0.8 * (d_in[(z-1)*zWidth + y*ywidth + x] 
