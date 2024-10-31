@@ -4,7 +4,7 @@ NVCC=nvcc
 CFLAGS=-O2 -std=c17 -D_POSIX_C_SOURCE=199309L
 CXXFLAGS=-O2 -std=c++17
 CPPFLAGS=
-CUDAFLAGS=-O2 -std=c++17 -arch=sm_80 -lineinfo -res-usage -src-in-ptx
+CUDAFLAGS=-O2 -std=c++17 -arch=sm_75 -lineinfo -res-usage -src-in-ptx
 
 # First target is the default target
 all: problem1 problem2 problem3-v0 problem4

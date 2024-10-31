@@ -1,3 +1,4 @@
+#include <cassert>
 #include <cstdlib>
 #include <cuda.h>
 #include <iostream>
@@ -23,26 +24,168 @@ inline void gpuAssert(cudaError_t code, const char* file, int line,
 }
 
 const uint64_t N = (64);
-const uint32_t THREADS_PER_BLOCK = 32;
+const uint32_t THREADS_PER_BLOCKX = 4;
+const uint32_t THREADS_PER_BLOCKY = 4;
+const uint32_t THREADS_PER_BLOCKZ = 4;
+
+
+/* 
+  Each thread-block will process a 32x8x8 cube
+  Each thread block will have 32x2x2 threads
+  Hence each thread process a 1x4x4 cube block
+*/
+
+const uint32_t BLOCK_JUMPS = 4;
+const uint32_t TILE_DIMX = 32;
+const uint32_t TILE_DIMY = 8;
+const uint32_t TILE_DIMZ = 8;
+
+const uint32_t low = 0;
+const uint32_t high = 4;
+
+__global__ void print_mat_host(const double* A) {
+  // printf("Hellow World\n");
+  for (int i = low; i < high; ++i) {
+    for (int j = low; j < high; ++j) {
+      for (int k = low; k < high; ++k) {
+        printf("%lf,", A[i * N * N + j * N + k]);
+      }
+      printf("      ");
+    }
+    printf("\n");
+  }
+  
+}
+
 
 // TODO: Edit the function definition as required
-__global__ void kernel1(const double* d_in, double* d_out) {
+__global__ void kernel1( double* d_in, double* d_out) {
   
-  int x = blockIdx.x*THREADS_PER_BLOCK + threadIdx.x;
-  int y = blockIdx.y*THREADS_PER_BLOCK + threadIdx.y;
-  int z = blockIdx.z*THREADS_PER_BLOCK + threadIdx.z;
+  int x = blockIdx.x*blockDim.x + threadIdx.x;
+  int y = blockIdx.y*blockDim.y + threadIdx.y;
+  int z = blockIdx.z*blockDim.z + threadIdx.z;
+  //printf("(%d, %d, %d)\n",x,y,z);
+  uint32_t zWidth = (blockDim.x*gridDim.x)*(blockDim.y*gridDim.y);
+  uint32_t ywidth = blockDim.x*gridDim.x;
 
-  uint32_t zWidth = (THREADS_PER_BLOCK * blockDim.x) * (THREADS_PER_BLOCK * blockDim.y);
-  uint32_t ywidth = THREADS_PER_BLOCK * blockDim.x;
-
-  d_out[z*zWidth + y*ywidth + x] = 0.8 * (d_in[(z-1)*zWidth + y*ywidth + x] + 
-      d_in[(z+1)*zWidth + y*ywidth + x] + d_in[z*zWidth + (y-1)*ywidth + x] + 
-      d_in[z*zWidth + (y+1)*ywidth + x] + d_in[z*zWidth + y*ywidth + x+1] + 
-      d_in[z*zWidth + y*ywidth + x-1]); 
+  if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
+     d_out[z*zWidth + y*ywidth + x] = 0.8 * (d_in[(z-1)*zWidth + y*ywidth + x] 
+        + d_in[(z+1)*zWidth + y*ywidth + x] 
+        + d_in[z*zWidth + (y-1)*ywidth + x] 
+        + d_in[z*zWidth + (y+1)*ywidth + x] 
+        + d_in[z*zWidth + y*ywidth + x+1] 
+        + d_in[z*zWidth + y*ywidth + x-1]);
+  }
 }
 
 // TODO: Edit the function definition as required
-__global__ void kernel2() {}
+__global__ void kernel2_new(double* d_in, double* d_out) {
+
+  __shared__ double tile[(TILE_DIM+2)*(TILE_DIM+2)*(TILE_DIM+2)];
+  uint32_t PER_THREAD_CNT = TILE_DIM/BLOCK_JUMPS; // 32/4 = 8
+
+  int x = blockIdx.x*blockDim.x + threadIdx.x;
+  int y = blockIdx.y*blockDim.y + threadIdx.y;
+  int z = blockIdx.z*blockDim.z + threadIdx.z;
+
+  uint32_t zWidth = (blockDim.x*gridDim.x)*(blockDim.y*gridDim.y*(PER_THREAD_CNT));
+  uint32_t ywidth = blockDim.x*gridDim.x;
+
+  uint32_t z_bar = z;
+  uint32_t y_bar = y;
+
+  //load to shared memory 
+  for(int i=0; i<PER_THREAD_CNT; i++){
+    for(int j=0; j<PER_THREAD_CNT; j++){
+      z = z_bar*(PER_THREAD_CNT) + i;
+      y = y_bar*(PER_THREAD_CNT) + j;
+
+      if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
+         tile[(1+threadIdx.z*PER_THREAD_CNT-1)*(TILE_DIM+2)*(TILE_DIM+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x)]   
+              = d_in[(z-1)*zWidth + y*ywidth + x];
+         tile[(1+threadIdx.z*PER_THREAD_CNT+1)*(TILE_DIM+2)*(TILE_DIM+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x)]   
+            = d_in[(z+1)*zWidth + y*ywidth + x];
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT-1)*(TILE_DIM+2) + (1+threadIdx.x)]   
+            = d_in[z*zWidth + (y-1)*ywidth + x];
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT+1)*(TILE_DIM+2) + (1+threadIdx.x)]   
+            = d_in[z*zWidth + (y+1)*ywidth + x];
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x+1)]   
+            = d_in[z*zWidth + y*ywidth + x+1]; 
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x-1)]   
+            = d_in[z*zWidth + y*ywidth + x-1];
+      }
+    }
+  }
+    
+  //synchronize 
+  __syncthreads(); 
+
+  //use shared memory now 
+  for(int i=0; i<TILE_DIM/BLOCK_JUMPS; i++){
+    for(int j=0; j<TILE_DIM/BLOCK_JUMPS; j++){
+      z = z_bar*(TILE_DIM/BLOCK_JUMPS) + i;
+      y = y_bar*(TILE_DIM/BLOCK_JUMPS) + j;
+
+      if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
+         d_out[z*zWidth + y*ywidth + x] = 0.8 * (
+           tile[(1+threadIdx.z*PER_THREAD_CNT-1)*(TILE_DIM+2)*(TILE_DIM+2) +  
+                (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x)]   
+             + 
+           tile[(1+threadIdx.z*PER_THREAD_CNT+1)*(TILE_DIM+2)*(TILE_DIM+2) +  
+                (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x)]   
+             + 
+           tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
+                (1+threadIdx.y*PER_THREAD_CNT-1)*(TILE_DIM+2) + (1+threadIdx.x)]   
+             + 
+           tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
+                (1+threadIdx.y*PER_THREAD_CNT+1)*(TILE_DIM+2) + (1+threadIdx.x)]   
+             + 
+           tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
+                (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x+1)]   
+             + 
+           tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIM+2)*(TILE_DIM+2) +  
+                (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIM+2) + (1+threadIdx.x-1)]   
+           );
+      }
+    }
+  }
+  //ohh my god! please make it work fine!!!
+}
+
+// TODO: Edit the function definition as required
+__global__ void kernel2(double* d_in, double* d_out) {
+
+  int x = blockIdx.x*blockDim.x + threadIdx.x;
+  int y = blockIdx.y*blockDim.y + threadIdx.y;
+  int z = blockIdx.z*blockDim.z + threadIdx.z;
+
+  uint32_t zWidth = (blockDim.x*gridDim.x)*(blockDim.y*gridDim.y*(TILE_DIM/BLOCK_JUMPS));
+  uint32_t ywidth = blockDim.x*gridDim.x;
+
+  uint32_t z_bar = z;
+  uint32_t y_bar = y;
+  for(int i=0; i<TILE_DIM/BLOCK_JUMPS; i++){
+    for(int j=0; j<TILE_DIM/BLOCK_JUMPS; j++){
+      z = z_bar*(TILE_DIM/BLOCK_JUMPS) + i;
+      y = y_bar*(TILE_DIM/BLOCK_JUMPS) + j;
+
+      if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
+         d_out[z*zWidth + y*ywidth + x] = 0.8 * (d_in[(z-1)*zWidth + y*ywidth + x] 
+            + d_in[(z+1)*zWidth + y*ywidth + x] 
+            + d_in[z*zWidth + (y-1)*ywidth + x] 
+            + d_in[z*zWidth + (y+1)*ywidth + x] 
+            + d_in[z*zWidth + y*ywidth + x+1] 
+            + d_in[z*zWidth + y*ywidth + x-1]);
+      }
+    }
+  }
+}
 
 
 
@@ -53,12 +196,13 @@ __host__ void stencil(int N, double *in, double *out) {
     for(int j=1; j<N-1; j++) {
       for(int k=1; k<N-1; k++) {
         out[i*N*N + j*N + k] = 0.8 * (
-                in[(i-1)*N*N + j*N     + k    ] +
-                in[(i+1)*N*N + j*N     + k    ] +
-                in[i*N*N     + (j-1)*N + k    ] +
-                in[i*N*N     + (j+1)*N + k    ] +
-                in[i*N*N     + j*N     + (k-1)] +
-                in[i*N*N     + j*N     + (k+1)] );
+          in[(i-1)*N*N + j*N + k] +
+          in[(i+1)*N*N + j*N + k] +
+          in[i*N*N + (j-1)*N + k] +
+          in[i*N*N + (j+1)*N + k] +
+          in[i*N*N + j*N + (k-1)] +
+          in[i*N*N + j*N + (k+1)]
+        );
       }
     }
   }
@@ -71,9 +215,13 @@ __host__ void check_result(const double* w_ref, const double* w_opt,
   double maxdiff = 0.0;
   int numdiffs = 0;
 
+  uint64_t nonZeroCnt = 0;
   for (uint64_t i = 0; i < size; i++) {
     for (uint64_t j = 0; j < size; j++) {
       for (uint64_t k = 0; k < size; k++) {
+        if(w_ref[i + N * j + N * N * k] == 0.0)
+          nonZeroCnt += 1;
+
         double this_diff =
             w_ref[i + N * j + N * N * k] - w_opt[i + N * j + N * N * k];
         if (std::fabs(this_diff) > THRESHOLD) {
@@ -86,6 +234,10 @@ __host__ void check_result(const double* w_ref, const double* w_opt,
     }
   }
 
+  printf("The host output has %ld non-zero values\n",nonZeroCnt);
+
+
+
   if (numdiffs > 0) {
     cout << numdiffs << " Diffs found over THRESHOLD " << THRESHOLD
          << "; Max Diff = " << maxdiff << endl;
@@ -95,8 +247,19 @@ __host__ void check_result(const double* w_ref, const double* w_opt,
 }
 
 
-
 void print_mat(const double* A) {
+  for (int i = low; i < high; ++i) {
+    for (int j = low; j < high; ++j) {
+      for (int k = low; k < high; ++k) {
+        printf("%lf,", A[i * N * N + j * N + k]);
+      }
+      printf("      ");
+    }
+    printf("\n");
+  }
+}
+
+void print_mat_full(const double* A) {
   for (int i = 0; i < N; ++i) {
     for (int j = 0; j < N; ++j) {
       for (int k = 0; k < N; ++k) {
@@ -119,6 +282,7 @@ double rtclock() { // Seconds
   return (Tp.tv_sec + Tp.tv_usec * 1.0e-6);
 }
 
+bool debug = false;
 int main() {
   uint64_t SIZE = N * N * N;
   uint64_t MEMSIZE = SIZE * sizeof(double);
@@ -133,65 +297,144 @@ int main() {
       }
     }
   }
+ 
+ if(debug){
+   cout << "Host input data: \n";
+   print_mat(h_in);
+ }
 
-  double clkbegin = rtclock();
-  stencil(N, h_in, h_out);
-  double clkend = rtclock();
-  double cpu_time = clkend - clkbegin;
-  cout << "Stencil time on CPU: " << cpu_time * 1000 << " msec" << endl;
+ double clkbegin = rtclock();
+ stencil(N, h_in, h_out);
+ double clkend = rtclock();
+ double cpu_time = clkend - clkbegin;
+ cout << "Stencil time on CPU: " << cpu_time * 1000 << " msec" << endl;
 
+ if(debug){
+   cout << "Host output data: \n";
+   print_mat(h_out);
+ }
+ /////////////////// Kernel 1 ////////////////////////////////
+ //cudaError_t status;
+ cudaEvent_t start, end;
+ 
+ // TODO: Fill in kernel1
+ double *d_in, *d_out; //device data 
+ //cuda memory allocation
+ cudaCheckError( cudaMalloc(&d_in, MEMSIZE));
+ cudaCheckError( cudaMalloc(&d_out, MEMSIZE));
 
-  /////////////////// Kernel 1 ////////////////////////////////
-  //cudaError_t status;
-  cudaEvent_t start, end;
-  
-  // TODO: Fill in kernel1
-  double *d_in, *d_out; //device data 
-  //cuda memory allocation
-  cudaCheckError( cudaMalloc(&d_in, MEMSIZE));
-  cudaCheckError( cudaMalloc(&d_out, MEMSIZE));
+ //copy the input memory 
+ cudaCheckError( cudaMemcpy(d_in, h_in, MEMSIZE, cudaMemcpyHostToDevice) );
 
-  //copy the input memory 
-  cudaCheckError( cudaMemcpy(d_in, h_in, MEMSIZE, cudaMemcpyHostToDevice) );
+ if(debug){
+   cout << "Device input data: \n";
+   print_mat_host<<<1,1>>>(d_in);
+ }
+ cudaError_t err = cudaGetLastError();
+ if (err != cudaSuccess) 
+     printf("<print_mat_host> Error: %s\n", cudaGetErrorString(err));
 
-  //Invokding the kernel 1 
-  cudaCheckError( cudaEventCreate(&start) );
-  cudaCheckError( cudaEventCreate(&end) );
-  cudaCheckError( cudaEventRecord(start, 0) );
-  // dimension defintions 
-  uint32_t grid  = N/THREADS_PER_BLOCK;
-  dim3 dimGrid(grid, grid, grid);
-  dim3 dimBlock(THREADS_PER_BLOCK, THREADS_PER_BLOCK, THREADS_PER_BLOCK);
+ cudaCheckError( cudaDeviceSynchronize() );
+ //Invokding the kernel 1 
+ cudaCheckError( cudaEventCreate(&start) );
+ cudaCheckError( cudaEventCreate(&end) );
+ cudaCheckError( cudaEventRecord(start) );
+ // dimension defintions 
+ dim3 dimGrid(N/THREADS_PER_BLOCKX, N/THREADS_PER_BLOCKY, N/THREADS_PER_BLOCKZ);
+ dim3 dimBlock(THREADS_PER_BLOCKX, THREADS_PER_BLOCKY, THREADS_PER_BLOCKZ);
 
-  //CUDA Kernel cal
-  kernel1<<<dimGrid, dimBlock>>>(d_in, d_out);
+ //CUDA Kernel cal
+ kernel1<<<dimGrid, dimBlock>>>(d_in, d_out);
 
-  cudaCheckError( cudaEventRecord(end, 0) );
-  cudaCheckError( cudaEventSynchronize(end) );
+ err = cudaGetLastError();
+ if (err != cudaSuccess) 
+     printf("<kernel1> Error: %s\n", cudaGetErrorString(err));
 
-  float kernel_time;
-  cudaCheckError( cudaEventElapsedTime(&kernel_time, start, end) );
-  
-  // TODO: Adapt check_result() and invoke
-  double *kernel1_out = (double*) malloc(MEMSIZE);
-  cudaCheckError( cudaMemcpy(kernel1_out, d_out, MEMSIZE, cudaMemcpyDeviceToHost));
+ cudaCheckError( cudaEventRecord(end) );
+ // TODO: Adapt check_result() and invoke
+ double *kernel1_out = (double*) malloc(MEMSIZE);
+ cudaCheckError( cudaMemcpy(kernel1_out, d_out, MEMSIZE, cudaMemcpyDeviceToHost));
 
-  check_result(h_out, kernel1_out, N);
+ cudaCheckError( cudaEventSynchronize(end) );
 
-  std::cout << "Kernel 1 time (ms): " << kernel_time << "\n";
-  cudaCheckError( cudaEventDestroy(start) );
-  cudaCheckError( cudaEventDestroy(end) );
+ float kernel1_time;
+ cudaCheckError( cudaEventElapsedTime(&kernel1_time, start, end) );
 
+ if(debug){
+   cout << "Device Output data: \n";
+   print_mat(kernel1_out);
+ }
+ check_result(h_out, kernel1_out, N);
 
-  return EXIT_SUCCESS;
-  
-  /////////////////// Kernel 2 ////////////////////////////////
-  // TODO: Fill in kernel2
-  // TODO: Adapt check_result() and invoke
-  cudaEventElapsedTime(&kernel_time, start, end);
-  std::cout << "Kernel 2 time (ms): " << kernel_time << "\n";
+ std::cout << "Kernel 1 time (ms): " << kernel1_time << "\n";
+ cudaCheckError( cudaEventDestroy(start) );
+ cudaCheckError( cudaEventDestroy(end) );
 
-  // TODO: Free memory
+ if(debug){
+   cout << "-----------------------------" << endl;
+  }
+ /////////////////// Kernel 2 ////////////////////////////////
+ // TODO: Fill in kernel2
+ double *d_k2_in, *d_k2_out;
 
-  return EXIT_SUCCESS;
+ cudaCheckError( cudaMalloc(&d_k2_in, MEMSIZE));
+ cudaCheckError( cudaMalloc(&d_k2_out, MEMSIZE));
+
+ //copy the input memory 
+ cudaCheckError( cudaMemcpy(d_k2_in, h_in, MEMSIZE, cudaMemcpyHostToDevice) );
+
+ if(debug){
+   cout << "k2:Device input data: \n";
+   print_mat_host<<<1,1>>>(d_k2_in);
+ }
+ err = cudaGetLastError();
+ if (err != cudaSuccess) 
+     printf("k2:<print_mat_host> Error: %s\n", cudaGetErrorString(err));
+
+ cudaCheckError( cudaDeviceSynchronize() );
+ //Invokding the kernel 1 
+ cudaCheckError( cudaEventCreate(&start) );
+ cudaCheckError( cudaEventCreate(&end) );
+ cudaCheckError( cudaEventRecord(start) );
+ // dimension defintions 
+ dim3 dimGrid2(N/TILE_DIMX, N/TILE_DIMY, N/TILE_DIMZ);
+ dim3 dimBlock2(TILE_DIMX, TILE_DIMY/BLOCK_JUMPS, TILE_DIMZ/BLOCK_JUMPS);
+
+ //CUDA Kernel cal
+ kernel2<<<dimGrid2, dimBlock2>>>(d_k2_in, d_k2_out);
+
+ err = cudaGetLastError();
+ if (err != cudaSuccess) 
+     printf("<kernel2> Error: %s\n", cudaGetErrorString(err));
+
+ cudaCheckError( cudaEventRecord(end) );
+ // TODO: Adapt check_result() and invoke
+ double *kernel2_out = (double*) malloc(MEMSIZE);
+ cudaCheckError( cudaMemcpy(kernel2_out, d_k2_out, MEMSIZE, cudaMemcpyDeviceToHost));
+
+ cudaCheckError( cudaEventSynchronize(end) );
+
+ float kernel2_time;
+ cudaCheckError( cudaEventElapsedTime(&kernel2_time, start, end) );
+
+ if(debug){
+   cout << "k2:Device Output data: \n";
+   print_mat(kernel2_out);
+ }
+ check_result(h_out, kernel2_out, N);
+
+ std::cout << "Kernel 2 time (ms): " << kernel1_time << "\n";
+ cudaCheckError( cudaEventDestroy(start) );
+ cudaCheckError( cudaEventDestroy(end) );
+
+ // TODO: Free memory
+ cudaCheckError( cudaFree(d_k2_out));
+ cudaCheckError( cudaFree(d_k2_in));
+ cudaCheckError( cudaFree(d_in));
+ cudaCheckError( cudaFree(d_out));
+ free(h_in);
+ free(h_out);
+ free(kernel2_out);
+ free(kernel1_out);
+ return EXIT_SUCCESS;
 }
