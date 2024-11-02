@@ -324,9 +324,16 @@ int main() {
  cudaCheckError( cudaMalloc(&d_in, MEMSIZE));
  cudaCheckError( cudaMalloc(&d_out, MEMSIZE));
 
+ // dimension defintions 
+ dim3 dimGrid(N/THREADS_PER_BLOCKX, N/THREADS_PER_BLOCKY, N/THREADS_PER_BLOCKZ);
+ dim3 dimBlock(THREADS_PER_BLOCKX, THREADS_PER_BLOCKY, THREADS_PER_BLOCKZ);
+
+ cudaCheckError( cudaEventCreate(&start) );
+ cudaCheckError( cudaEventCreate(&end) );
+ cudaCheckError( cudaEventRecord(start) );
  //copy the input memory 
  cudaCheckError( cudaMemcpy(d_in, h_in, MEMSIZE, cudaMemcpyHostToDevice) );
-
+/*
  if(debug){
    cout << "Device input data: \n";
    print_mat_host<<<1,1>>>(d_in);
@@ -334,19 +341,13 @@ int main() {
  cudaError_t err = cudaGetLastError();
  if (err != cudaSuccess) 
      printf("<print_mat_host> Error: %s\n", cudaGetErrorString(err));
-
+*/ 
  //Invokding the kernel 1 
- cudaCheckError( cudaEventCreate(&start) );
- cudaCheckError( cudaEventCreate(&end) );
- cudaCheckError( cudaEventRecord(start) );
- // dimension defintions 
- dim3 dimGrid(N/THREADS_PER_BLOCKX, N/THREADS_PER_BLOCKY, N/THREADS_PER_BLOCKZ);
- dim3 dimBlock(THREADS_PER_BLOCKX, THREADS_PER_BLOCKY, THREADS_PER_BLOCKZ);
 
  //CUDA Kernel cal
  kernel1<<<dimGrid, dimBlock>>>(d_in, d_out);
 
- err = cudaGetLastError();
+ cudaError_t err = cudaGetLastError();
  if (err != cudaSuccess) 
      printf("<kernel1> Error: %s\n", cudaGetErrorString(err));
 
@@ -381,6 +382,7 @@ int main() {
  cudaCheckError( cudaMalloc(&d_k2_out, MEMSIZE));
 
  //copy the input memory 
+ /*
  cudaCheckError( cudaMemcpy(d_k2_in, h_in, MEMSIZE, cudaMemcpyHostToDevice) );
 
  if(debug){
@@ -390,15 +392,16 @@ int main() {
  err = cudaGetLastError();
  if (err != cudaSuccess) 
      printf("k2:<print_mat_host> Error: %s\n", cudaGetErrorString(err));
-
+*/
+ // dimension defintions 
+ dim3 dimGrid2(N/TILE_DIMX, N/TILE_DIMY, N/TILE_DIMZ);
+ dim3 dimBlock2(TILE_DIMX, TILE_DIMY/BLOCK_JUMPS, TILE_DIMZ/BLOCK_JUMPS);
  //Invokding the kernel 1 
  cudaEvent_t start2, end2;
  cudaCheckError( cudaEventCreate(&start2) );
  cudaCheckError( cudaEventCreate(&end2) );
  cudaCheckError( cudaEventRecord(start2) );
- // dimension defintions 
- dim3 dimGrid2(N/TILE_DIMX, N/TILE_DIMY, N/TILE_DIMZ);
- dim3 dimBlock2(TILE_DIMX, TILE_DIMY/BLOCK_JUMPS, TILE_DIMZ/BLOCK_JUMPS);
+ cudaCheckError( cudaMemcpy(d_k2_in, h_in, MEMSIZE, cudaMemcpyHostToDevice) );
 
  //CUDA Kernel cal
  kernel2<<<dimGrid2, dimBlock2>>>(d_k2_in, d_k2_out);
