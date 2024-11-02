@@ -25,12 +25,16 @@ inline void gpuAssert(cudaError_t code, const char* file, int line,
 
 const uint64_t N = (1 << 6);
 const uint32_t KERNEL_DIM = 3;
-const uint32_t low = 0;
-const uint32_t high = 3;
+const uint32_t low = 5;
+const uint32_t high = 8;
 const uint32_t THREADS_PER_BLOCKX = 32;
 const uint32_t THREADS_PER_BLOCKY = 32;
-const uint32_t THREADS_PER_BLOCKZ = 32;
+const uint32_t THREADS_PER_BLOCKZ = 4;
 const uint32_t TILE_DIM = 32;
+const uint32_t TILE_DIMX = 32;
+const uint32_t TILE_DIMY = 16;
+const uint32_t TILE_DIMZ = 16;
+const uint32_t ELEMENTS_PER_THREAD = 4;
 
 __global__ void print_mat_host3D(const float* A){
   // printf("Hellow World\n");
@@ -123,9 +127,63 @@ __global__ void kernel3D(float* inp, float* out, float* kernel) {
       }
     } 
   }
-  out[y*N + x] = sum;
+  out[z*N*N + y*N + x] = sum;
 }
 
+
+__global__ void kernel3D_opt(float* inp, float* out, float* kernel) {
+
+  const int32_t d = KERNEL_DIM/2;
+  __shared__ float tile[(TILE_DIMX+2*d)*(TILE_DIMY+2*d)*(TILE_DIMZ+2*d)];
+  const int32_t TILE_NX = TILE_DIMX+2*d;
+  const int32_t TILE_NY = TILE_DIMY+2*d;
+  const int32_t NUM_Y = TILE_DIMY/blockDim.y;
+  const int32_t NUM_Z = TILE_DIMZ/blockDim.z;
+
+  int x = blockIdx.x*blockDim.x + threadIdx.x;
+  int y = blockIdx.y*blockDim.y + threadIdx.y;
+  int z = blockIdx.z*blockDim.z + threadIdx.z;
+  
+  for(int z_dir=0; z_dir<NUM_Z; z_dir++){
+    for(int y_dir=0; y_dir<NUM_Y; y_dir++){
+
+      for(int k=0; k<KERNEL_DIM; k++){
+        for(int i=0; i<KERNEL_DIM; i++){
+          for(int j=0; j<KERNEL_DIM; j++){
+            tile[(threadIdx.z*(NUM_Z)+z_dir+k)*TILE_NX*TILE_NY + (threadIdx.y*(NUM_Y)+y_dir+i)*TILE_NX + threadIdx.x+j] = 
+                ((z*(NUM_Z)+z_dir-d+k<0 || z*(NUM_Z)+z_dir-d+k>=N || y*(NUM_Y)+y_dir-d+i<0 || y*(NUM_Y)+y_dir-d+i>=N || x-d+j<0 || x-d+j>=N)? 
+                 0:inp[(z*(NUM_Z)+z_dir-d+k)*N*N + (y*(NUM_Y)+y_dir-d+i)*N + (x-d+j)]);
+          }
+        }  
+      }
+
+    }
+  }
+  //tile[(threadIdx.y+d)*TILE_N + threadIdx.x+d] = inp[y*N + x];
+  __syncthreads();
+
+  float sum = 0.0;
+  if(!(TILE_DIMZ/blockDim.z == 4)) printf("Yeh toh kuch galat ho chuka hai\n");
+
+  for(int z_dir=0; z_dir<NUM_Z; z_dir++){
+    for(int y_dir=0; y_dir<NUM_Y; y_dir++){
+    
+      sum = 0.0;
+      for(int k=0; k<KERNEL_DIM; k++){
+        for(int i=0; i<KERNEL_DIM; i++){
+          for(int j=0; j<KERNEL_DIM; j++){
+            sum += kernel[k*KERNEL_DIM*KERNEL_DIM + i*KERNEL_DIM + j] *
+              tile[(threadIdx.z*(NUM_Z)+z_dir+k)*TILE_NX*TILE_NY + (threadIdx.y*(NUM_Y)+y_dir+i)*TILE_NX + threadIdx.x+j] ; 
+          }
+        }  
+      }
+      out[(z*(NUM_Z)+z_dir)*N*N + (y*(NUM_Y)+y_dir)*N + x] = sum;
+
+    }
+  }
+  //printf("(%d,%d,%d)\n",x,y,z);
+
+}
 
 __host__ void Conv2D_host(int32_t N, float* inp, float* out, float* kernel) {
 
@@ -284,7 +342,7 @@ double rtclock() { // Seconds
   return (Tp.tv_sec + Tp.tv_usec * 1.0e-6);
 }
 
-bool debug =true;
+bool debug =false;
 int main() {
   uint64_t SIZE;
   uint64_t MEMSIZE;
@@ -413,7 +471,7 @@ int main() {
 
  //return EXIT_SUCCESS;
  ///////////////////////////////////// 3*D /////////////////////////////////////
- printf("\n===================\n");
+ printf("\n===================\n\n");
  SIZE = N*N*N;
  MEMSIZE = SIZE * sizeof(float);
  KERNEL_MEMSIZE = KERNEL_DIM*KERNEL_DIM*KERNEL_DIM*sizeof(float);
@@ -436,7 +494,7 @@ int main() {
  for(int k=0; k<KERNEL_DIM; k++){
    for(int i=0; i<KERNEL_DIM; i++){
      for(int j=0; j<KERNEL_DIM; j++){
-       kernel_mat3d[k*N*N + i*N + j] = (i+j+k)*1.0;
+       kernel_mat3d[k*KERNEL_DIM*KERNEL_DIM + i*KERNEL_DIM + j] = (i+j+k)*1.0;
      }
    }
  }
@@ -484,8 +542,8 @@ int main() {
  cudaCheckError( cudaEventCreate(&end) );
  cudaCheckError( cudaEventRecord(start) );
  // dimension defintions 
- dim3 dimGrid3d(N/THREADS_PER_BLOCKX, N/THREADS_PER_BLOCKY,N/(THREADS_PER_BLOCKZ));
- dim3 dimBlock3d(THREADS_PER_BLOCKX, THREADS_PER_BLOCKY, THREADS_PER_BLOCKZ);
+ dim3 dimGrid3d(N/THREADS_PER_BLOCKX, N/(THREADS_PER_BLOCKY/4),N/(THREADS_PER_BLOCKZ));
+ dim3 dimBlock3d(THREADS_PER_BLOCKX, THREADS_PER_BLOCKY/4, THREADS_PER_BLOCKZ);
 
  //CUDA Kernel cal
  kernel3D<<<dimGrid3d, dimBlock3d>>>(d3d_in, d3d_out, d3d_kernel);
@@ -511,7 +569,35 @@ int main() {
  check_result_3D(h3d_out, kernel13d_out);
  std::cout << "Kernel3D time (ms): " << kernel_time << "\n";
 
+ /////////////// Optimized 3D Conv /////////////////////
+ cudaCheckError( cudaEventRecord(start));
 
+ dim3 dimGrid3d_opt(N/THREADS_PER_BLOCKX, N/TILE_DIMY,N/TILE_DIMZ);
+ dim3 dimBlock3d_opt(THREADS_PER_BLOCKX, TILE_DIMY/ELEMENTS_PER_THREAD, TILE_DIMZ/ELEMENTS_PER_THREAD);
+
+ kernel3D_opt<<<dimGrid3d_opt, dimBlock3d_opt>>>(d3d_in, d3d_out, d3d_kernel);
+ cudaDeviceSynchronize();
+ err = cudaGetLastError();
+ if (err != cudaSuccess) 
+     printf("<kernel3D_opt> Error: %s\n", cudaGetErrorString(err));
+
+ cudaCheckError( cudaEventRecord(end) );
+ // TODO: Adapt check_result() and invoke
+ //optimzed wala 
+ cudaCheckError( cudaMemcpy(kernel13d_out, d3d_out, MEMSIZE, cudaMemcpyDeviceToHost));
+
+ cudaCheckError( cudaEventSynchronize(end) );
+ cudaCheckError( cudaEventElapsedTime(&kernel_time, start, end) );
+
+ if(debug){
+   cout << "Optimized Device Output data: \n";
+   print_mat3D(kernel13d_out);
+ }
+ check_result_3D(h3d_out, kernel13d_out);
+ std::cout << "kernel3D_opt time (ms): " << kernel_time << "\n";
+
+ cudaCheckError( cudaEventDestroy(start));
+ cudaCheckError( cudaEventDestroy(end));
  // TODO: Free memory
 
  return EXIT_SUCCESS;
