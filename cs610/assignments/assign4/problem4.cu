@@ -32,9 +32,9 @@ const uint32_t THREADS_PER_BLOCKY = 32;
 const uint32_t THREADS_PER_BLOCKZ = 4;
 const uint32_t TILE_DIM = 32;
 const uint32_t TILE_DIMX = 32;
-const uint32_t TILE_DIMY = 16;
-const uint32_t TILE_DIMZ = 16;
-const uint32_t ELEMENTS_PER_THREAD = 4;
+const uint32_t TILE_DIMY = 16; //16
+const uint32_t TILE_DIMZ = 16; //16
+const uint32_t ELEMENTS_PER_THREAD = 1; // 4
 
 __global__ void print_mat_host3D(const float* A){
   // printf("Hellow World\n");
@@ -84,28 +84,32 @@ __global__ void kernel2D_opt(float* inp, float* out, float* kernel) {
   const int32_t d = KERNEL_DIM/2;
   __shared__ float tile[(TILE_DIM+2*d)*(TILE_DIM+2*d)];
   const int32_t TILE_N = TILE_DIM+2*d;
+  const int32_t NUM_Y = TILE_DIM/blockDim.y;
 
   int x = blockIdx.x*blockDim.x + threadIdx.x;
   int y = blockIdx.y*blockDim.y + threadIdx.y;
 
-  for(int i=0; i<KERNEL_DIM; i++){
-    for(int j=0; j<KERNEL_DIM; j++){
-      tile[(threadIdx.y+i)*TILE_N + threadIdx.x+j] = 
-      ((y-d+i<0 || y-d+i>=N || x-d+j<0 || x-d+j>=N)? 0:inp[(y-d+i)*N + (x-d+j)]);
-    }
-  }  
+  for(int y_dir=0; y_dir<NUM_Y; y_dir++){
+    for(int i=0; i<KERNEL_DIM; i++){
+      for(int j=0; j<KERNEL_DIM; j++){
+        tile[(threadIdx.y+y_dir+i)*TILE_N + threadIdx.x+j] = 
+        ((y+y_dir-d+i<0 || y+y_dir-d+i>=N || x-d+j<0 || x-d+j>=N)? 0:inp[(y+y_dir-d+i)*N + (x-d+j)]);
+      }
+    }  
+  }
   //tile[(threadIdx.y+d)*TILE_N + threadIdx.x+d] = inp[y*N + x];
   __syncthreads();
 
   float sum = 0.0;
 
-  for(int i=0; i<KERNEL_DIM; i++){
-    for(int j=0; j<KERNEL_DIM; j++){
-      sum += kernel[i*N + j]* tile[(threadIdx.y+i)*TILE_N + threadIdx.x+j];
-    }
-  } 
-
-  out[y*N + x] = sum;
+  for(int y_dir=0; y_dir<NUM_Y; y_dir++){
+    for(int i=0; i<KERNEL_DIM; i++){
+      for(int j=0; j<KERNEL_DIM; j++){
+        sum += kernel[i*N + j]* tile[(threadIdx.y+y_dir+i)*TILE_N + threadIdx.x+j];
+      }
+    } 
+    out[(y+y_dir)*N + x] = sum;
+  }
 }
 
 
@@ -130,8 +134,53 @@ __global__ void kernel3D(float* inp, float* out, float* kernel) {
   out[z*N*N + y*N + x] = sum;
 }
 
-
 __global__ void kernel3D_opt(float* inp, float* out, float* kernel) {
+
+  const int32_t d = KERNEL_DIM/2;
+  __shared__ float tile[(TILE_DIMX+2*d)*(TILE_DIMY+2*d)*(TILE_DIMZ+2*d)];
+  const int32_t TILE_NX = TILE_DIMX+2*d;
+  const int32_t TILE_NY = TILE_DIMY+2*d;
+  const int32_t NUM_Y = TILE_DIMY/blockDim.y;
+  const int32_t NUM_Z = TILE_DIMZ/blockDim.z;
+
+  int x = blockIdx.x*blockDim.x + threadIdx.x;
+  int y = blockIdx.y*blockDim.y + threadIdx.y;
+  int z = blockIdx.z*blockDim.z + threadIdx.z;
+  
+
+      for(int k=0; k<KERNEL_DIM; k++){
+        for(int i=0; i<KERNEL_DIM; i++){
+          for(int j=0; j<KERNEL_DIM; j++){
+            tile[(threadIdx.z*(NUM_Z)+k)*TILE_NX*TILE_NY + (threadIdx.y*(NUM_Y)+i)*TILE_NX + threadIdx.x+j] = 
+                ((z*(NUM_Z)-d+k<0 || z*(NUM_Z)-d+k>=N || y*(NUM_Y)-d+i<0 || y*(NUM_Y)-d+i>=N || x-d+j<0 || x-d+j>=N)? 
+                 0:inp[(z*(NUM_Z)-d+k)*N*N + (y*(NUM_Y)-d+i)*N + (x-d+j)]);
+          }
+        }  
+      }
+
+  //tile[(threadIdx.y+d)*TILE_N + threadIdx.x+d] = inp[y*N + x];
+  __syncthreads();
+
+  float sum = 0.0;
+  //if(!(TILE_DIMZ/blockDim.z == 4)) printf("Yeh toh kuch galat ho chuka hai\n");
+
+    
+      sum = 0.0;
+      for(int k=0; k<KERNEL_DIM; k++){
+        for(int i=0; i<KERNEL_DIM; i++){
+          for(int j=0; j<KERNEL_DIM; j++){
+            sum += kernel[k*KERNEL_DIM*KERNEL_DIM + i*KERNEL_DIM + j] *
+              tile[(threadIdx.z*(NUM_Z)+k)*TILE_NX*TILE_NY + (threadIdx.y*(NUM_Y)+i)*TILE_NX + threadIdx.x+j] ; 
+          }
+        }  
+      }
+      out[(z*(NUM_Z))*N*N + (y*(NUM_Y))*N + x] = sum;
+
+  //printf("(%d,%d,%d)\n",x,y,z);
+
+}
+
+__global__ void kernel3D_opt_old(float* inp, float* out, float* kernel) {
 
   const int32_t d = KERNEL_DIM/2;
   __shared__ float tile[(TILE_DIMX+2*d)*(TILE_DIMY+2*d)*(TILE_DIMZ+2*d)];
@@ -163,7 +212,7 @@ __global__ void kernel3D_opt(float* inp, float* out, float* kernel) {
   __syncthreads();
 
   float sum = 0.0;
-  if(!(TILE_DIMZ/blockDim.z == 4)) printf("Yeh toh kuch galat ho chuka hai\n");
+  //if(!(TILE_DIMZ/blockDim.z == 4)) printf("Yeh toh kuch galat ho chuka hai\n");
 
   for(int z_dir=0; z_dir<NUM_Z; z_dir++){
     for(int y_dir=0; y_dir<NUM_Y; y_dir++){
@@ -446,6 +495,8 @@ int main() {
  ///////// Optimized 2D conv ////////////// 
  cudaCheckError( cudaEventRecord(start));
 
+ dim3 dimGrid_opt(N/TILE_DIM, N/(TILE_DIM),1);
+ dim3 dimBlock_opt(TILE_DIM/1, TILE_DIM/1, 1);
  kernel2D_opt<<<dimGrid, dimBlock>>>(d2d_in, d2d_out, d2d_kernel);
  err = cudaGetLastError();
  if (err != cudaSuccess) 
@@ -542,8 +593,8 @@ int main() {
  cudaCheckError( cudaEventCreate(&end) );
  cudaCheckError( cudaEventRecord(start) );
  // dimension defintions 
- dim3 dimGrid3d(N/THREADS_PER_BLOCKX, N/(THREADS_PER_BLOCKY/4),N/(THREADS_PER_BLOCKZ));
- dim3 dimBlock3d(THREADS_PER_BLOCKX, THREADS_PER_BLOCKY/4, THREADS_PER_BLOCKZ);
+ dim3 dimGrid3d(N/(THREADS_PER_BLOCKX/8), N/(THREADS_PER_BLOCKY/8),N/(THREADS_PER_BLOCKZ));
+ dim3 dimBlock3d(THREADS_PER_BLOCKX/8, THREADS_PER_BLOCKY/8, THREADS_PER_BLOCKZ);
 
  //CUDA Kernel cal
  kernel3D<<<dimGrid3d, dimBlock3d>>>(d3d_in, d3d_out, d3d_kernel);
@@ -573,7 +624,7 @@ int main() {
  cudaCheckError( cudaEventRecord(start));
 
  dim3 dimGrid3d_opt(N/THREADS_PER_BLOCKX, N/TILE_DIMY,N/TILE_DIMZ);
- dim3 dimBlock3d_opt(THREADS_PER_BLOCKX, TILE_DIMY/ELEMENTS_PER_THREAD, TILE_DIMZ/ELEMENTS_PER_THREAD);
+ dim3 dimBlock3d_opt(THREADS_PER_BLOCKX, TILE_DIMY/16, TILE_DIMZ/16);
 
  kernel3D_opt<<<dimGrid3d_opt, dimBlock3d_opt>>>(d3d_in, d3d_out, d3d_kernel);
  cudaDeviceSynchronize();
