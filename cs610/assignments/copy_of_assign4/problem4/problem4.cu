@@ -23,7 +23,7 @@ inline void gpuAssert(cudaError_t code, const char* file, int line,
   }
 }
 
-const uint64_t N = (1 << 9);
+const uint64_t N = (1 << 6);
 const uint32_t KERNEL_DIM = 3;
 const uint32_t low = 5;
 const uint32_t high = 8;
@@ -303,6 +303,7 @@ __host__ void check_result_3D(const float* w_ref, const float* w_opt) {
     }
   }
 
+  printf("Host has %d nonzero elements\n", nonzero_cnt);
   if (numdiffs > 0) {
     cout << numdiffs << " Diffs found over THRESHOLD " << THRESHOLD
          << "; 3DMax Diff = " << maxdiff << endl;
@@ -514,7 +515,7 @@ int main() {
    print_mat2D(kernel12d_out);
  }
  check_result_2D(h2d_out, kernel12d_out);
- std::cout << "kernel2D(Optimized) time (ms): " << kernel_time << "\n";
+ std::cout << "kernel2D_opt time (ms): " << kernel_time << "\n";
 
  cudaCheckError( cudaEventDestroy(start));
  cudaCheckError( cudaEventDestroy(end));
@@ -644,7 +645,7 @@ int main() {
    print_mat3D(kernel13d_out);
  }
  check_result_3D(h3d_out, kernel13d_out);
- std::cout << "kernel3D(Optimized) time (ms): " << kernel_time << "\n";
+ std::cout << "kernel3D_opt time (ms): " << kernel_time << "\n";
 
  cudaCheckError( cudaEventDestroy(start));
  cudaCheckError( cudaEventDestroy(end));
