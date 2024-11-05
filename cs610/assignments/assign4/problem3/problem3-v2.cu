@@ -107,19 +107,15 @@ __global__ void gridloopsearch_counting_kernel(unsigned long long int* per_threa
   if(thread_id>= NUM_THREADS)
     return;
   int64_t local_cnt = 0;
-  //for (int r1 = 0; r1 < s1; ++r1) {
+
   x1 = dd1 + r1 * dd3;
 
-  //for (int r2 = 0; r2 < s2; ++r2) {
   x2 = dd4 + r2 * dd6;
 
-  //for (int r3 = 0; r3 < s3; ++r3) {
   x3 = dd7 + r3 * dd9;
   
-  //for (int r4 = 0; r4 < s4; ++r4) {
   x4 = dd10 + r4 * dd12;
 
-  //for (int r5 = 0; r5 < s5; ++r5) {
   x5 = dd13 + r5 * dd15;
   per_thread_cnt[thread_id] = 0;
 
@@ -184,29 +180,13 @@ __global__ void gridloopsearch_counting_kernel(unsigned long long int* per_threa
                           (q7 <= device_E_vals[6]) && (q8 <= device_E_vals[7]) && (q9 <= device_E_vals[8]) &&
                           (q10 <= device_E_vals[9])) {
                         local_cnt = local_cnt + 1;
-                        //printf("yes\n");
-
-                        // xi's which satisfy the constraints to be written in file
-                        // vector temp = {x1,x2,x3,x4,x5,x6,x7,x8,x9}
-                        // result[r1*LOOP_SIZE*LOOP_SIZE + r2*LOOP_SIZE + r3].push_back(temp);
-                        //double ttemp[] = {x1,x2,x3,x4,x5,x6,x7,x8,x9,x10};
-                        
                       }
                     }
                   }
                 }
               }
             }
-  /*
-  }
-  }
-  }
-  }
-  }
-  */
   per_thread_cnt[thread_id] = local_cnt;
-  // end function gridloopsearch
-  //printf("We had total %ld pnts\n",pnts);
 }
 
 __global__ void gridloopsearch_kernel(double* buffer, ull* per_thread_cnt,
@@ -255,19 +235,15 @@ __global__ void gridloopsearch_kernel(double* buffer, ull* per_thread_cnt,
   if(thread_id>= NUM_THREADS)
     return;
   int64_t local_cnt = 0;
-  //for (int r1 = 0; r1 < s1; ++r1) {
+
   x1 = dd1 + r1 * dd3;
 
-  //for (int r2 = 0; r2 < s2; ++r2) {
   x2 = dd4 + r2 * dd6;
 
-  //for (int r3 = 0; r3 < s3; ++r3) {
   x3 = dd7 + r3 * dd9;
   
-  //for (int r4 = 0; r4 < s4; ++r4) {
   x4 = dd10 + r4 * dd12;
 
-  //for (int r5 = 0; r5 < s5; ++r5) {
   x5 = dd13 + r5 * dd15;
 
             for (int r6 = 0; r6 < device_S_vals[5]; ++r6) {
@@ -349,15 +325,6 @@ __global__ void gridloopsearch_kernel(double* buffer, ull* per_thread_cnt,
                 }
               }
             }
-  /*
-  }
-  }
-  }
-  }
-  }
-  */
-  // end function gridloopsearch
-  //printf("We had total %ld pnts\n",pnts);
 }
 
 bool debug =false;
@@ -440,13 +407,9 @@ int main() {
   cudaMemcpyToSymbol(device_S_vals, S_vals, 10*sizeof(int));
    
   ///////////////// INVOKING KERNEL INSIDE CPU LOOPS ////////////////
-  ull* d_pnts;
-  cudaCheckError( cudaMalloc(&d_pnts,8));
-  
   //// COUNTING KERNEL LAUNCH ///////
   ull* d_per_thread_cnt;
-  cudaCheckError( cudaMalloc(&d_per_thread_cnt, NUM_THREADS*sizeof(ull)));
-  ull* h_per_thread_cnt = (ull*)malloc(NUM_THREADS*sizeof(ull)); 
+  cudaCheckError( cudaMallocManaged(&d_per_thread_cnt, NUM_THREADS*sizeof(ull)));
 
   gridloopsearch_counting_kernel<<<dimGrid, dimBlock>>>(d_per_thread_cnt,
        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11],
@@ -479,7 +442,7 @@ int main() {
 
   double* d_buffer;
   printf(" Total points: %llu, Memory assigned to buffer: (%llu)\n",TOT_POINTS, TOT_POINTS*10*sizeof(double));
-  cudaCheckError( cudaMalloc(&d_buffer, TOT_POINTS*10*sizeof(double)));
+  cudaCheckError( cudaMallocManaged(&d_buffer, TOT_POINTS*10*sizeof(double)));
 
   gridloopsearch_kernel<<<dimGrid, dimBlock>>>(d_buffer, d_per_thread_cnt,
        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11],
@@ -498,14 +461,15 @@ int main() {
        a[104], a[105], a[106], a[107], a[108], a[109], a[110], a[111], a[112],
        a[113], a[114], a[115], a[116], a[117], a[118], a[119], kk);
 
-  double* h_buffer = (double*) malloc(TOT_POINTS*10*sizeof(double));
-  cudaCheckError( cudaMemcpy(h_buffer, d_buffer, TOT_POINTS*10*sizeof(double), cudaMemcpyDeviceToHost));
+  //double* h_buffer = (double*) malloc(TOT_POINTS*10*sizeof(double));
+  //cudaCheckError( cudaMemcpy(h_buffer, d_buffer, TOT_POINTS*10*sizeof(double), cudaMemcpyDeviceToHost));
   cudaError_t err = cudaGetLastError();
   if (err != cudaSuccess) 
       printf("<kernel> Error: %s\n", cudaGetErrorString(err));
  
 
   //printing to file
+  cudaCheckError( cudaDeviceSynchronize());
   
   FILE* fptr = fopen("./results-v0.txt", "w");
   if (fptr == NULL) {
@@ -513,7 +477,7 @@ int main() {
     exit(1);
   }
   for(int i=0; i<TOT_POINTS*10; i += 10){
-    double* output = &h_buffer[i];
+    double* output = &d_buffer[i];
     fprintf(fptr, "%lf\t", output[0]);
     fprintf(fptr, "%lf\t", output[1]);
     fprintf(fptr, "%lf\t", output[2]);
