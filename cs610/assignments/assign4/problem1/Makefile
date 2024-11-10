@@ -4,7 +4,7 @@ NVCC=nvcc
 CFLAGS=-O2 -std=c17 -D_POSIX_C_SOURCE=199309L
 CXXFLAGS=-O2 -std=c++17
 CPPFLAGS=
-CUDAFLAGS=-O2 -std=c++17 -arch=sm_70 -lineinfo -res-usage -src-in-ptx
+CUDAFLAGS=-O2 -std=c++17 -arch=sm_86 -lineinfo -res-usage -src-in-ptx -ccbin=g++-9
 
 # First target is the default target
 all: problem1-loop-unroll-and-pinned problem1-loop-unroll-and-uvm problem1-loop-unroll problem1-naive-and-opt

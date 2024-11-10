@@ -6,7 +6,7 @@
 #include <sys/time.h>
 #include <thrust/host_vector.h>
 #include <thrust/device_vector.h>
-#include <thrust/copy.h>
+#include <thrust/scan.h>
 
 #define THRESHOLD (std::numeric_limits<float>::epsilon())
 typedef unsigned long long int ull;
@@ -57,6 +57,10 @@ __device__ void allocate_n_assign(VALUES** out, int thread_id, double* in){
   head->next = temp;
 }
 
+__constant__ double device_E_vals[10];
+__constant__ int device_S_vals[10];
+
+
 __global__ void gridloopsearch_counting_kernel(unsigned long long int* per_thread_cnt,
     double dd1, double dd2, double dd3, double dd4, double dd5, double dd6,
     double dd7, double dd8, double dd9, double dd10, double dd11, double dd12,
@@ -90,56 +94,6 @@ __global__ void gridloopsearch_counting_kernel(unsigned long long int* per_threa
   // constraint values
   double q1, q2, q3, q4, q5, q6, q7, q8, q9, q10;
 
-  // results points
-  //long pnts = 0;
-
-  // re-calculated limits
-  double e1, e2, e3, e4, e5, e6, e7, e8, e9, e10;
-
-  // opening the "results-v0.txt" for writing he results in append mode
-  /*
-  FILE* fptr = fopen("./results-v0.txt", "w");
-  if (fptr == NULL) {
-    printf("Error in creating file !");
-    exit(1);
-  }
-  */
-  // initialization of re calculated limits, xi's.
-  e1 = kk * ey1;
-  e2 = kk * ey2;
-  e3 = kk * ey3;
-  e4 = kk * ey4;
-  e5 = kk * ey5;
-  e6 = kk * ey6;
-  e7 = kk * ey7;
-  e8 = kk * ey8;
-  e9 = kk * ey9;
-  e10 = kk * ey10;
-
-  x1 = dd1;
-  x2 = dd4;
-  x3 = dd7;
-  x4 = dd10;
-  x5 = dd13;
-  x6 = dd16;
-  x7 = dd19;
-  x8 = dd22;
-  x9 = dd25;
-  x10 = dd28;
-
-  // for loop upper values
-  int s1, s2, s3, s4, s5, s6, s7, s8, s9, s10;
-  s1 = floor((dd2 - dd1) / dd3);
-  s2 = floor((dd5 - dd4) / dd6);
-  s3 = floor((dd8 - dd7) / dd9);
-  s4 = floor((dd11 - dd10) / dd12);
-  s5 = floor((dd14 - dd13) / dd15);
-  s6 = floor((dd17 - dd16) / dd18);
-  s7 = floor((dd20 - dd19) / dd21);
-  s8 = floor((dd23 - dd22) / dd24);
-  s9 = floor((dd26 - dd25) / dd27);
-  s10 = floor((dd29 - dd28) / dd30);
-
   // grid search starts
   int r1 = blockIdx.z;
   int r2 = blockIdx.y;
@@ -153,35 +107,31 @@ __global__ void gridloopsearch_counting_kernel(unsigned long long int* per_threa
   if(thread_id>= NUM_THREADS)
     return;
   int64_t local_cnt = 0;
-  //for (int r1 = 0; r1 < s1; ++r1) {
+
   x1 = dd1 + r1 * dd3;
 
-  //for (int r2 = 0; r2 < s2; ++r2) {
   x2 = dd4 + r2 * dd6;
 
-  //for (int r3 = 0; r3 < s3; ++r3) {
   x3 = dd7 + r3 * dd9;
   
-  //for (int r4 = 0; r4 < s4; ++r4) {
   x4 = dd10 + r4 * dd12;
 
-  //for (int r5 = 0; r5 < s5; ++r5) {
   x5 = dd13 + r5 * dd15;
   per_thread_cnt[thread_id] = 0;
 
-            for (int r6 = 0; r6 < s6; ++r6) {
+            for (int r6 = 0; r6 < device_S_vals[5]; ++r6) {
               x6 = dd16 + r6 * dd18;
 
-              for (int r7 = 0; r7 < s7; ++r7) {
+              for (int r7 = 0; r7 < device_S_vals[6]; ++r7) {
                 x7 = dd19 + r7 * dd21;
 
-                for (int r8 = 0; r8 < s8; ++r8) {
+                for (int r8 = 0; r8 < device_S_vals[7]; ++r8) {
                   x8 = dd22 + r8 * dd24;
 
-                  for (int r9 = 0; r9 < s9; ++r9) {
+                  for (int r9 = 0; r9 < device_S_vals[8]; ++r9) {
                     x9 = dd25 + r9 * dd27;
 
-                    for (int r10 = 0; r10 < s10; ++r10) {
+                    for (int r10 = 0; r10 < device_S_vals[9]; ++r10) {
                       x10 = dd28 + r10 * dd30;
 
                       // constraints
@@ -225,35 +175,18 @@ __global__ void gridloopsearch_counting_kernel(unsigned long long int* per_threa
                                  c105 * x5 + c106 * x6 + c107 * x7 + c108 * x8 +
                                  c109 * x9 + c1010 * x10 - d10);
 
-                      if ((q1 <= e1) && (q2 <= e2) && (q3 <= e3) &&
-                          (q4 <= e4) && (q5 <= e5) && (q6 <= e6) &&
-                          (q7 <= e7) && (q8 <= e8) && (q9 <= e9) &&
-                          (q10 <= e10)) {
+                      if ((q1 <= device_E_vals[0]) && (q2 <= device_E_vals[1]) && (q3 <= device_E_vals[2]) &&
+                          (q4 <= device_E_vals[3]) && (q5 <= device_E_vals[4]) && (q6 <= device_E_vals[5]) &&
+                          (q7 <= device_E_vals[6]) && (q8 <= device_E_vals[7]) && (q9 <= device_E_vals[8]) &&
+                          (q10 <= device_E_vals[9])) {
                         local_cnt = local_cnt + 1;
-                        //printf("yes\n");
-
-                        // xi's which satisfy the constraints to be written in file
-                        // vector temp = {x1,x2,x3,x4,x5,x6,x7,x8,x9}
-                        // result[r1*LOOP_SIZE*LOOP_SIZE + r2*LOOP_SIZE + r3].push_back(temp);
-                        //double ttemp[] = {x1,x2,x3,x4,x5,x6,x7,x8,x9,x10};
-                        
                       }
                     }
                   }
                 }
               }
             }
-  /*
-  }
-  }
-  }
-  }
-  }
-  */
   per_thread_cnt[thread_id] = local_cnt;
-  // end function gridloopsearch
-  //printf("We had total %ld pnts\n",pnts);
-
 }
 
 __global__ void gridloopsearch_kernel(double* buffer, ull* per_thread_cnt,
@@ -289,56 +222,6 @@ __global__ void gridloopsearch_kernel(double* buffer, ull* per_thread_cnt,
   // constraint values
   double q1, q2, q3, q4, q5, q6, q7, q8, q9, q10;
 
-  // results points
-  //long pnts = 0;
-
-  // re-calculated limits
-  double e1, e2, e3, e4, e5, e6, e7, e8, e9, e10;
-
-  // opening the "results-v0.txt" for writing he results in append mode
-  /*
-  FILE* fptr = fopen("./results-v0.txt", "w");
-  if (fptr == NULL) {
-    printf("Error in creating file !");
-    exit(1);
-  }
-  */
-  // initialization of re calculated limits, xi's.
-  e1 = kk * ey1;
-  e2 = kk * ey2;
-  e3 = kk * ey3;
-  e4 = kk * ey4;
-  e5 = kk * ey5;
-  e6 = kk * ey6;
-  e7 = kk * ey7;
-  e8 = kk * ey8;
-  e9 = kk * ey9;
-  e10 = kk * ey10;
-
-  x1 = dd1;
-  x2 = dd4;
-  x3 = dd7;
-  x4 = dd10;
-  x5 = dd13;
-  x6 = dd16;
-  x7 = dd19;
-  x8 = dd22;
-  x9 = dd25;
-  x10 = dd28;
-
-  // for loop upper values
-  int s1, s2, s3, s4, s5, s6, s7, s8, s9, s10;
-  s1 = floor((dd2 - dd1) / dd3);
-  s2 = floor((dd5 - dd4) / dd6);
-  s3 = floor((dd8 - dd7) / dd9);
-  s4 = floor((dd11 - dd10) / dd12);
-  s5 = floor((dd14 - dd13) / dd15);
-  s6 = floor((dd17 - dd16) / dd18);
-  s7 = floor((dd20 - dd19) / dd21);
-  s8 = floor((dd23 - dd22) / dd24);
-  s9 = floor((dd26 - dd25) / dd27);
-  s10 = floor((dd29 - dd28) / dd30);
-
   // grid search starts
   int r1 = blockIdx.z;
   int r2 = blockIdx.y;
@@ -352,34 +235,30 @@ __global__ void gridloopsearch_kernel(double* buffer, ull* per_thread_cnt,
   if(thread_id>= NUM_THREADS)
     return;
   int64_t local_cnt = 0;
-  //for (int r1 = 0; r1 < s1; ++r1) {
+
   x1 = dd1 + r1 * dd3;
 
-  //for (int r2 = 0; r2 < s2; ++r2) {
   x2 = dd4 + r2 * dd6;
 
-  //for (int r3 = 0; r3 < s3; ++r3) {
   x3 = dd7 + r3 * dd9;
   
-  //for (int r4 = 0; r4 < s4; ++r4) {
   x4 = dd10 + r4 * dd12;
 
-  //for (int r5 = 0; r5 < s5; ++r5) {
   x5 = dd13 + r5 * dd15;
 
-            for (int r6 = 0; r6 < s6; ++r6) {
+            for (int r6 = 0; r6 < device_S_vals[5]; ++r6) {
               x6 = dd16 + r6 * dd18;
 
-              for (int r7 = 0; r7 < s7; ++r7) {
+              for (int r7 = 0; r7 < device_S_vals[6]; ++r7) {
                 x7 = dd19 + r7 * dd21;
 
-                for (int r8 = 0; r8 < s8; ++r8) {
+                for (int r8 = 0; r8 < device_S_vals[7]; ++r8) {
                   x8 = dd22 + r8 * dd24;
 
-                  for (int r9 = 0; r9 < s9; ++r9) {
+                  for (int r9 = 0; r9 < device_S_vals[8]; ++r9) {
                     x9 = dd25 + r9 * dd27;
 
-                    for (int r10 = 0; r10 < s10; ++r10) {
+                    for (int r10 = 0; r10 < device_S_vals[9]; ++r10) {
                       x10 = dd28 + r10 * dd30;
 
                       // constraints
@@ -423,10 +302,10 @@ __global__ void gridloopsearch_kernel(double* buffer, ull* per_thread_cnt,
                                  c105 * x5 + c106 * x6 + c107 * x7 + c108 * x8 +
                                  c109 * x9 + c1010 * x10 - d10);
 
-                      if ((q1 <= e1) && (q2 <= e2) && (q3 <= e3) &&
-                          (q4 <= e4) && (q5 <= e5) && (q6 <= e6) &&
-                          (q7 <= e7) && (q8 <= e8) && (q9 <= e9) &&
-                          (q10 <= e10)) {
+                      if ((q1 <= device_E_vals[0]) && (q2 <= device_E_vals[1]) && (q3 <= device_E_vals[2]) &&
+                          (q4 <= device_E_vals[3]) && (q5 <= device_E_vals[4]) && (q6 <= device_E_vals[5]) &&
+                          (q7 <= device_E_vals[6]) && (q8 <= device_E_vals[7]) && (q9 <= device_E_vals[8]) &&
+                          (q10 <= device_E_vals[9])) {
                       //put values into buffer starting from buffer[per_thread_cnt[thread_id]*10 + local_cnt*10]
                         double* temp = &buffer[(per_thread_cnt[thread_id]+local_cnt)*10];
                         temp[0] = x1;
@@ -446,15 +325,6 @@ __global__ void gridloopsearch_kernel(double* buffer, ull* per_thread_cnt,
                 }
               }
             }
-  /*
-  }
-  }
-  }
-  }
-  }
-  */
-  // end function gridloopsearch
-  //printf("We had total %ld pnts\n",pnts);
 }
 
 bool debug =false;
@@ -507,13 +377,39 @@ int main() {
   cudaCheckError( cudaEventCreate(&end) );
   cudaCheckError( cudaEventRecord(start) );
 
-  ull* d_pnts;
-  cudaCheckError( cudaMalloc(&d_pnts,8));
-  
+  ////////////////// PRE-COMPUTATION ON CPU ///////////////////////// 
+
+  double* E_vals = (double*)malloc(10*sizeof(double));
+  int* S_vals = (int*)malloc(10*sizeof(int));
+  E_vals[0] = kk * a[12*0 + 11];
+  E_vals[1] = kk * a[12*1 + 11];
+  E_vals[2] = kk * a[12*2 + 11];
+  E_vals[3] = kk * a[12*3 + 11];
+  E_vals[4] = kk * a[12*4 + 11];
+  E_vals[5] = kk * a[12*5 + 11];
+  E_vals[6] = kk * a[12*6 + 11];
+  E_vals[7] = kk * a[12*7 + 11];
+  E_vals[8] = kk * a[12*8 + 11];
+  E_vals[9] = kk * a[12*9 + 11];
+
+  S_vals[0] = floor((b[0*3 + 1] - b[0*3 + 0]) / b[0*3 + 2]);
+  S_vals[1] = floor((b[1*3 + 1] - b[1*3 + 0]) / b[1*3 + 2]);
+  S_vals[2] = floor((b[2*3 + 1] - b[2*3 + 0]) / b[2*3 + 2]);
+  S_vals[3] = floor((b[3*3 + 1] - b[3*3 + 0]) / b[3*3 + 2]);
+  S_vals[4] = floor((b[4*3 + 1] - b[4*3 + 0]) / b[4*3 + 2]);
+  S_vals[5] = floor((b[5*3 + 1] - b[5*3 + 0]) / b[5*3 + 2]);
+  S_vals[6] = floor((b[6*3 + 1] - b[6*3 + 0]) / b[6*3 + 2]);
+  S_vals[7] = floor((b[7*3 + 1] - b[7*3 + 0]) / b[7*3 + 2]);
+  S_vals[8] = floor((b[8*3 + 1] - b[8*3 + 0]) / b[8*3 + 2]);
+  S_vals[9] = floor((b[9*3 + 1] - b[9*3 + 0]) / b[9*3 + 2]);
+
+  cudaMemcpyToSymbol(device_E_vals, E_vals, 10*sizeof(double));
+  cudaMemcpyToSymbol(device_S_vals, S_vals, 10*sizeof(int));
+   
+  ///////////////// INVOKING KERNEL INSIDE CPU LOOPS ////////////////
   //// COUNTING KERNEL LAUNCH ///////
   ull* d_per_thread_cnt;
-  cudaCheckError( cudaMalloc(&d_per_thread_cnt, NUM_THREADS*sizeof(ull)));
-  ull* h_per_thread_cnt = (ull*)malloc(NUM_THREADS*sizeof(ull)); 
+  cudaCheckError( cudaMallocManaged(&d_per_thread_cnt, NUM_THREADS*sizeof(ull)));
 
   gridloopsearch_counting_kernel<<<dimGrid, dimBlock>>>(d_per_thread_cnt,
        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11],
@@ -531,30 +427,22 @@ int main() {
        a[94], a[95], a[96], a[97], a[98], a[99], a[100], a[101], a[102], a[103],
        a[104], a[105], a[106], a[107], a[108], a[109], a[110], a[111], a[112],
        a[113], a[114], a[115], a[116], a[117], a[118], a[119], kk);
+  
+  ull last_value;
+  cudaCheckError( cudaMemcpy(&last_value, d_per_thread_cnt+NUM_THREADS-1, 8, cudaMemcpyDeviceToHost));
 
-  cudaCheckError( cudaMemcpy(h_per_thread_cnt, d_per_thread_cnt, NUM_THREADS*sizeof(ull), cudaMemcpyDeviceToHost));
-   ull pnts = 0;
-  for(int i=0; i<NUM_THREADS; i++)
-      pnts += h_per_thread_cnt[i]; //prefix sum cnt of per_thread_cnt array
-
-  printf("results pnts: %llu\n", pnts);
-
-  ull sum = h_per_thread_cnt[0];
-  //h_per_thread_cnt[0] = 0;
-  for(int i=1; i<NUM_THREADS; i++){
-    ull temp = h_per_thread_cnt[i];
-    h_per_thread_cnt[i] = sum;
-    sum += temp;
-  }
-  ull TOT_POINTS = sum;
-  printf("TOTAL POINTS: %llu\n", TOT_POINTS);
-  cudaCheckError( cudaMemcpy(d_per_thread_cnt,h_per_thread_cnt, NUM_THREADS*sizeof(ull), cudaMemcpyHostToDevice));
+  thrust::device_ptr<ull> per_thread_thrust(d_per_thread_cnt);
+  thrust::exclusive_scan(per_thread_thrust, per_thread_thrust + NUM_THREADS, per_thread_thrust);
 
   //// COMPUTING KERNEL LAUNCH ///////
-  
+  ull TOT_POINTS = last_value;
+  cudaCheckError( cudaMemcpy(&last_value, d_per_thread_cnt+NUM_THREADS-1, 8, cudaMemcpyDeviceToHost));
+  TOT_POINTS += last_value;
+  assert(TOT_POINTS==11608);
+
   double* d_buffer;
-  printf("Memory assigned to buffer: (%llu)\n", TOT_POINTS*10*sizeof(double));
-  cudaCheckError( cudaMalloc(&d_buffer, TOT_POINTS*10*sizeof(double)));
+  //printf(" Total points: %llu, Memory assigned to buffer: (%llu)\n",TOT_POINTS, TOT_POINTS*10*sizeof(double));
+  cudaCheckError( cudaMallocManaged(&d_buffer, TOT_POINTS*10*sizeof(double)));
 
   gridloopsearch_kernel<<<dimGrid, dimBlock>>>(d_buffer, d_per_thread_cnt,
        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11],
@@ -573,14 +461,15 @@ int main() {
        a[104], a[105], a[106], a[107], a[108], a[109], a[110], a[111], a[112],
        a[113], a[114], a[115], a[116], a[117], a[118], a[119], kk);
 
-  double* h_buffer = (double*) malloc(TOT_POINTS*10*sizeof(double));
-  cudaCheckError( cudaMemcpy(h_buffer, d_buffer, TOT_POINTS*10*sizeof(double), cudaMemcpyDeviceToHost));
+  //double* h_buffer = (double*) malloc(TOT_POINTS*10*sizeof(double));
+  //cudaCheckError( cudaMemcpy(h_buffer, d_buffer, TOT_POINTS*10*sizeof(double), cudaMemcpyDeviceToHost));
   cudaError_t err = cudaGetLastError();
   if (err != cudaSuccess) 
       printf("<kernel> Error: %s\n", cudaGetErrorString(err));
  
 
   //printing to file
+  cudaCheckError( cudaDeviceSynchronize());
   
   FILE* fptr = fopen("./results-v0.txt", "w");
   if (fptr == NULL) {
@@ -588,7 +477,7 @@ int main() {
     exit(1);
   }
   for(int i=0; i<TOT_POINTS*10; i += 10){
-    double* output = &h_buffer[i];
+    double* output = &d_buffer[i];
     fprintf(fptr, "%lf\t", output[0]);
     fprintf(fptr, "%lf\t", output[1]);
     fprintf(fptr, "%lf\t", output[2]);
@@ -602,12 +491,12 @@ int main() {
   }
   fclose(fptr);
   
-  printf("results pnts: %llu\n", pnts);
+  printf("results pnts: %llu\n", TOT_POINTS);
   cudaCheckError( cudaEventRecord(end) );
   cudaCheckError( cudaEventSynchronize(end) );
   float kernel_time;
   cudaCheckError( cudaEventElapsedTime(&kernel_time, start, end) );
-  std::cout << "Kernel time (ms): " << kernel_time << "\n";
+  std::cout << "Kernel(Optimized + UVM) time (ms): " << kernel_time << "\n";
 
 
   return EXIT_SUCCESS;

@@ -161,7 +161,7 @@ __global__ void gridloopsearch_counting_kernel(unsigned long long int* per_threa
 
   //for (int r3 = 0; r3 < s3; ++r3) {
   x3 = dd7 + r3 * dd9;
-  
+
   //for (int r4 = 0; r4 < s4; ++r4) {
   x4 = dd10 + r4 * dd12;
 
@@ -236,7 +236,7 @@ __global__ void gridloopsearch_counting_kernel(unsigned long long int* per_threa
                         // vector temp = {x1,x2,x3,x4,x5,x6,x7,x8,x9}
                         // result[r1*LOOP_SIZE*LOOP_SIZE + r2*LOOP_SIZE + r3].push_back(temp);
                         //double ttemp[] = {x1,x2,x3,x4,x5,x6,x7,x8,x9,x10};
-                        
+
                       }
                     }
                   }
@@ -360,7 +360,7 @@ __global__ void gridloopsearch_kernel(double* buffer, ull* per_thread_cnt,
 
   //for (int r3 = 0; r3 < s3; ++r3) {
   x3 = dd7 + r3 * dd9;
-  
+
   //for (int r4 = 0; r4 < s4; ++r4) {
   x4 = dd10 + r4 * dd12;
 
@@ -494,7 +494,7 @@ int main() {
 
   dim3 dimGrid(LOOP_SIZE, LOOP_SIZE,LOOP_SIZE);
   dim3 dimBlock((LOOP_SIZE), (LOOP_SIZE), 1);
-  
+
   cudaEvent_t start, end;
   cudaCheckError( cudaEventCreate(&start) );
   cudaCheckError( cudaEventCreate(&end) );
@@ -502,11 +502,11 @@ int main() {
 
   ull* d_pnts;
   cudaCheckError( cudaMalloc(&d_pnts,8));
-  
+
   //// COUNTING KERNEL LAUNCH ///////
   ull* d_per_thread_cnt;
   cudaCheckError( cudaMalloc(&d_per_thread_cnt, NUM_THREADS*sizeof(ull)));
-  ull* h_per_thread_cnt = (ull*)malloc(NUM_THREADS*sizeof(ull)); 
+  ull* h_per_thread_cnt = (ull*)malloc(NUM_THREADS*sizeof(ull));
 
   gridloopsearch_counting_kernel<<<dimGrid, dimBlock>>>(d_per_thread_cnt,
        b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7], b[8], b[9], b[10], b[11],
@@ -544,9 +544,9 @@ int main() {
   cudaCheckError( cudaMemcpy(d_per_thread_cnt,h_per_thread_cnt, NUM_THREADS*sizeof(ull), cudaMemcpyHostToDevice));
 
   //// COMPUTING KERNEL LAUNCH ///////
-  
+
   double* d_buffer;
-  printf("Memory assigned to buffer: (%llu)\n", TOT_POINTS*10*sizeof(double));
+  //printf("Memory assigned to buffer: (%llu)\n", TOT_POINTS*10*sizeof(double));
   cudaCheckError( cudaMalloc(&d_buffer, TOT_POINTS*10*sizeof(double)));
 
   gridloopsearch_kernel<<<dimGrid, dimBlock>>>(d_buffer, d_per_thread_cnt,
@@ -569,12 +569,12 @@ int main() {
   double* h_buffer = (double*) malloc(TOT_POINTS*10*sizeof(double));
   cudaCheckError( cudaMemcpy(h_buffer, d_buffer, TOT_POINTS*10*sizeof(double), cudaMemcpyDeviceToHost));
   cudaError_t err = cudaGetLastError();
-  if (err != cudaSuccess) 
+  if (err != cudaSuccess)
       printf("<kernel> Error: %s\n", cudaGetErrorString(err));
- 
+
 
   //printing to file
-  
+
   FILE* fptr = fopen("./results-v0.txt", "w");
   if (fptr == NULL) {
     printf("Error in creating file !");
@@ -594,7 +594,7 @@ int main() {
     fprintf(fptr, "%lf\n", output[9]);
   }
   fclose(fptr);
-  
+
   printf("results pnts: %llu\n", pnts);
   cudaCheckError( cudaEventRecord(end) );
   cudaCheckError( cudaEventSynchronize(end) );

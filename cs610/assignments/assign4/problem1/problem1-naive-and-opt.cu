@@ -23,22 +23,22 @@ inline void gpuAssert(cudaError_t code, const char* file, int line,
   }
 }
 
-const uint64_t N = (64);
+const uint64_t N = (128); //64
 const uint32_t THREADS_PER_BLOCKX = 4;
 const uint32_t THREADS_PER_BLOCKY = 4;
 const uint32_t THREADS_PER_BLOCKZ = 4;
 
 
-/* 
+/*
   Each thread-block will process a 32x8x8 cube
   Each thread block will have 32x2x2 threads
   Hence each thread process a 1x4x4 cube block
 */
 
-const uint32_t BLOCK_JUMPS = 4;
+const uint32_t BLOCK_JUMPS = 4;//4
 const uint32_t TILE_DIMX = 32;
-const uint32_t TILE_DIMY = 8;
-const uint32_t TILE_DIMZ = 8;
+const uint32_t TILE_DIMY = 8;//8
+const uint32_t TILE_DIMZ = 8;//8
 
 const uint32_t low = 0;
 const uint32_t high = 4;
@@ -54,27 +54,27 @@ __global__ void print_mat_host(const double* A) {
     }
     printf("\n");
   }
-  
+
 }
 
 // TODO: Edit the function definition as required
 __global__ void kernel1( double* d_in, double* d_out) {
-  
+
   int x = blockIdx.x*blockDim.x + threadIdx.x;
   int y = blockIdx.y*blockDim.y + threadIdx.y;
   int z = blockIdx.z*blockDim.z + threadIdx.z;
   //printf("(%d, %d, %d)\n",x,y,z);
   //uint32_t zWidth = (blockDim.x*gridDim.x)*(blockDim.y*gridDim.y);
   //uint32_t ywidth = blockDim.x*gridDim.x;
-  uint32_t zWidth = N*N;  
-  uint32_t ywidth = N; 
+  uint32_t zWidth = N*N;
+  uint32_t ywidth = N;
   if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
      d_out[z*zWidth + y*ywidth + x] = 0.8 * (
-          d_in[(z-1)*zWidth + y*ywidth + x] 
-        + d_in[(z+1)*zWidth + y*ywidth + x] 
-        + d_in[z*zWidth + (y-1)*ywidth + x] 
-        + d_in[z*zWidth + (y+1)*ywidth + x] 
-        + d_in[z*zWidth + y*ywidth + x-1] 
+          d_in[(z-1)*zWidth + y*ywidth + x]
+        + d_in[(z+1)*zWidth + y*ywidth + x]
+        + d_in[z*zWidth + (y-1)*ywidth + x]
+        + d_in[z*zWidth + (y+1)*ywidth + x]
+        + d_in[z*zWidth + y*ywidth + x-1]
         + d_in[z*zWidth + y*ywidth + x+1]);
   }
 }
@@ -83,7 +83,7 @@ __global__ void kernel1( double* d_in, double* d_out) {
 __global__ void kernel2(double* d_in, double* d_out) {
 
   __shared__ double tile[(TILE_DIMX+2)*(TILE_DIMY+2)*(TILE_DIMZ+2)];
-  uint32_t PER_THREAD_CNT = BLOCK_JUMPS; // 4 
+  uint32_t PER_THREAD_CNT = BLOCK_JUMPS; // 4
 
   int x = blockIdx.x*blockDim.x + threadIdx.x;
   int y = blockIdx.y*blockDim.y + threadIdx.y;
@@ -95,39 +95,39 @@ __global__ void kernel2(double* d_in, double* d_out) {
   uint32_t z_bar = z;
   uint32_t y_bar = y;
 
-  //load to shared memory 
+  //load to shared memory
   for(int i=0; i<PER_THREAD_CNT; i++){
     for(int j=0; j<PER_THREAD_CNT; j++){
       z = z_bar*(PER_THREAD_CNT) + i;
       y = y_bar*(PER_THREAD_CNT) + j;
 
       if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
-         tile[(1+threadIdx.z*PER_THREAD_CNT-1)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT-1)*(TILE_DIMX+2)*(TILE_DIMY+2) +
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]
               = d_in[(z-1)*zWidth + y*ywidth + x];
-         tile[(1+threadIdx.z*PER_THREAD_CNT+1)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT+1)*(TILE_DIMX+2)*(TILE_DIMY+2) +
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]
             = d_in[(z+1)*zWidth + y*ywidth + x];
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMY+2)*(TILE_DIMX+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT-1)*(TILE_DIMX+2) + (1+threadIdx.x)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMY+2)*(TILE_DIMX+2) +
+              (1+threadIdx.y*PER_THREAD_CNT-1)*(TILE_DIMX+2) + (1+threadIdx.x)]
             = d_in[z*zWidth + (y-1)*ywidth + x];
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT+1)*(TILE_DIMX+2) + (1+threadIdx.x)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +
+              (1+threadIdx.y*PER_THREAD_CNT+1)*(TILE_DIMX+2) + (1+threadIdx.x)]
             = d_in[z*zWidth + (y+1)*ywidth + x];
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x-1)]   
-            = d_in[z*zWidth + y*ywidth + x-1]; 
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x+1)]   
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x-1)]
+            = d_in[z*zWidth + y*ywidth + x-1];
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x+1)]
             = d_in[z*zWidth + y*ywidth + x+1];
       }
     }
   }
-    
-  //synchronize 
-  __syncthreads(); 
 
-  //use shared memory now 
+  //synchronize
+  __syncthreads();
+
+  //use shared memory now
   for(int i=0; i<PER_THREAD_CNT; i++){
     for(int j=0; j<PER_THREAD_CNT; j++){
       z = z_bar*(PER_THREAD_CNT) + i;
@@ -135,23 +135,23 @@ __global__ void kernel2(double* d_in, double* d_out) {
 
       if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
          d_out[z*zWidth + y*ywidth + x] = 0.8 * (
-         tile[(1+threadIdx.z*PER_THREAD_CNT-1)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]   
-           + 
-         tile[(1+threadIdx.z*PER_THREAD_CNT+1)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]   
-           + 
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMY+2)*(TILE_DIMX+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT-1)*(TILE_DIMX+2) + (1+threadIdx.x)]   
-           + 
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT+1)*(TILE_DIMX+2) + (1+threadIdx.x)]   
-           + 
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x-1)]   
-           + 
-         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +  
-              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x+1)]);  
+         tile[(1+threadIdx.z*PER_THREAD_CNT-1)*(TILE_DIMX+2)*(TILE_DIMY+2) +
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]
+           +
+         tile[(1+threadIdx.z*PER_THREAD_CNT+1)*(TILE_DIMX+2)*(TILE_DIMY+2) +
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x)]
+           +
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMY+2)*(TILE_DIMX+2) +
+              (1+threadIdx.y*PER_THREAD_CNT-1)*(TILE_DIMX+2) + (1+threadIdx.x)]
+           +
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +
+              (1+threadIdx.y*PER_THREAD_CNT+1)*(TILE_DIMX+2) + (1+threadIdx.x)]
+           +
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x-1)]
+           +
+         tile[(1+threadIdx.z*PER_THREAD_CNT)*(TILE_DIMX+2)*(TILE_DIMY+2) +
+              (1+threadIdx.y*PER_THREAD_CNT)*(TILE_DIMX+2) + (1+threadIdx.x+1)]);
       }
     }
   }
@@ -161,7 +161,7 @@ __global__ void kernel2(double* d_in, double* d_out) {
 // TODO: Edit the function definition as required
 __global__ void kernel2_old(double* d_in, double* d_out) {
 
-  // thread coordinates 
+  // thread coordinates
   int x = blockIdx.x*blockDim.x + threadIdx.x;
   int y = blockIdx.y*blockDim.y + threadIdx.y;
   int z = blockIdx.z*blockDim.z + threadIdx.z;
@@ -177,11 +177,11 @@ __global__ void kernel2_old(double* d_in, double* d_out) {
       y = y_bar*(BLOCK_JUMPS) + j;
 
       if(!(x==0 || x==N-1 || y==0 || y==N-1 || z==0 || z==N-1)){
-         d_out[z*zWidth + y*ywidth + x] = 0.8 * (d_in[(z-1)*zWidth + y*ywidth + x] 
-            + d_in[(z+1)*zWidth + y*ywidth + x] 
-            + d_in[z*zWidth + (y-1)*ywidth + x] 
-            + d_in[z*zWidth + (y+1)*ywidth + x] 
-            + d_in[z*zWidth + y*ywidth + x+1] 
+         d_out[z*zWidth + y*ywidth + x] = 0.8 * (d_in[(z-1)*zWidth + y*ywidth + x]
+            + d_in[(z+1)*zWidth + y*ywidth + x]
+            + d_in[z*zWidth + (y-1)*ywidth + x]
+            + d_in[z*zWidth + (y+1)*ywidth + x]
+            + d_in[z*zWidth + y*ywidth + x+1]
             + d_in[z*zWidth + y*ywidth + x-1]);
       }
     }
@@ -192,7 +192,7 @@ __global__ void kernel2_old(double* d_in, double* d_out) {
 
 // TODO: Edit the function definition as required
 __host__ void stencil(int N, double *in, double *out) {
-  //this one is the default one which runs on cpu 
+  //this one is the default one which runs on cpu
   for(int i=1; i<N-1; i++) {
     for(int j=1; j<N-1; j++) {
       for(int k=1; k<N-1; k++) {
@@ -286,10 +286,10 @@ bool debug = false;
 int main() {
   uint64_t SIZE = N * N * N;
   uint64_t MEMSIZE = SIZE * sizeof(double);
-  double* h_in  = (double*) malloc(MEMSIZE); 
-  double* h_out  = (double*) malloc(MEMSIZE); 
+  double* h_in  = (double*) malloc(MEMSIZE);
+  double* h_out  = (double*) malloc(MEMSIZE);
 
-  //random values in h_in 
+  //random values in h_in
   for(int i=0; i<N; i++){
     for(int j=0; j<N; j++){
       for(int k=0; k<N; k++){
@@ -297,7 +297,7 @@ int main() {
       }
     }
   }
- 
+
  if(debug){
    cout << "Host input data: \n";
    print_mat(h_in);
@@ -316,21 +316,21 @@ int main() {
  /////////////////// Kernel 1 ////////////////////////////////
  //cudaError_t status;
  cudaEvent_t start, end;
- 
+
  // TODO: Fill in kernel1
- double *d_in, *d_out; //device data 
+ double *d_in, *d_out; //device data
  //cuda memory allocation
  cudaCheckError( cudaMalloc(&d_in, MEMSIZE));
  cudaCheckError( cudaMalloc(&d_out, MEMSIZE));
 
- // dimension defintions 
+ // dimension defintions
  dim3 dimGrid(N/THREADS_PER_BLOCKX, N/THREADS_PER_BLOCKY, N/THREADS_PER_BLOCKZ);
  dim3 dimBlock(THREADS_PER_BLOCKX, THREADS_PER_BLOCKY, THREADS_PER_BLOCKZ);
 
  cudaCheckError( cudaEventCreate(&start) );
  cudaCheckError( cudaEventCreate(&end) );
  cudaCheckError( cudaEventRecord(start) );
- //copy the input memory 
+ //copy the input memory
  cudaCheckError( cudaMemcpy(d_in, h_in, MEMSIZE, cudaMemcpyHostToDevice) );
 /*
  if(debug){
@@ -338,16 +338,16 @@ int main() {
    print_mat_host<<<1,1>>>(d_in);
  }
  cudaError_t err = cudaGetLastError();
- if (err != cudaSuccess) 
+ if (err != cudaSuccess)
      printf("<print_mat_host> Error: %s\n", cudaGetErrorString(err));
-*/ 
- //Invokding the kernel 1 
+*/
+ //Invokding the kernel 1
 
  //CUDA Kernel cal
  kernel1<<<dimGrid, dimBlock>>>(d_in, d_out);
 
  cudaError_t err = cudaGetLastError();
- if (err != cudaSuccess) 
+ if (err != cudaSuccess)
      printf("<kernel1> Error: %s\n", cudaGetErrorString(err));
 
  cudaCheckError( cudaEventRecord(end) );
@@ -380,7 +380,7 @@ int main() {
  cudaCheckError( cudaMalloc(&d_k2_in, MEMSIZE));
  cudaCheckError( cudaMalloc(&d_k2_out, MEMSIZE));
 
- //copy the input memory 
+ //copy the input memory
  /*
  cudaCheckError( cudaMemcpy(d_k2_in, h_in, MEMSIZE, cudaMemcpyHostToDevice) );
 
@@ -389,24 +389,24 @@ int main() {
    print_mat_host<<<1,1>>>(d_k2_in);
  }
  err = cudaGetLastError();
- if (err != cudaSuccess) 
+ if (err != cudaSuccess)
      printf("k2:<print_mat_host> Error: %s\n", cudaGetErrorString(err));
 */
- // dimension defintions 
+ // dimension defintions
  dim3 dimGrid2(N/TILE_DIMX, N/TILE_DIMY, N/TILE_DIMZ);
  dim3 dimBlock2(TILE_DIMX, TILE_DIMY/BLOCK_JUMPS, TILE_DIMZ/BLOCK_JUMPS);
- //Invokding the kernel 1 
+ //Invokding the kernel 1
+ cudaCheckError( cudaMemcpy(d_k2_in, h_in, MEMSIZE, cudaMemcpyHostToDevice) );
  cudaEvent_t start2, end2;
  cudaCheckError( cudaEventCreate(&start2) );
  cudaCheckError( cudaEventCreate(&end2) );
  cudaCheckError( cudaEventRecord(start2) );
- cudaCheckError( cudaMemcpy(d_k2_in, h_in, MEMSIZE, cudaMemcpyHostToDevice) );
 
  //CUDA Kernel cal
  kernel2<<<dimGrid2, dimBlock2>>>(d_k2_in, d_k2_out);
 
  err = cudaGetLastError();
- if (err != cudaSuccess) 
+ if (err != cudaSuccess)
      printf("<kernel2> Error: %s\n", cudaGetErrorString(err));
 
  cudaCheckError( cudaEventRecord(end2) );
