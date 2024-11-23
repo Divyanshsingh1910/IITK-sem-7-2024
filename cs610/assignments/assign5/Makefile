@@ -7,10 +7,10 @@ all: problem1
 
 # $@ is a variable that contains the target name.
 problem1: problem1.cpp
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -o $(patsubst %.cpp,%.out,$<)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -o $(patsubst %.cpp,%.out,$<) -fopenmp -ltbb
 
 problem2: problem2.cpp
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $< -o $(patsubst %.cpp,%.out,$<)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -fopenmp $< -o $(patsubst %.cpp,%.out,$<)
 
 # The target is not a filename
 clean:
